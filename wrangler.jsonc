@@ -1,0 +1,10 @@
+// Cloudflare Workers settings for the live site.
+// Publish ONLY the app's own files: build.sh copies them into dist/.
+// (Database scripts, CLAUDE.md and other internal files stay off the site.)
+{
+  "name": "hocco-pm-tool",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}
