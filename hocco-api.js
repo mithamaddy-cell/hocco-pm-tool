@@ -44,7 +44,7 @@ window.HoccoAPI = (function () {
     return sb.auth.getSession().then(function (res) {
       var user = res.data && res.data.session && res.data.session.user;
       if (!user) return null;
-      return sb.from("profiles").select("full_name, department_id").eq("id", user.id).maybeSingle()
+      return sb.from("profiles").select("full_name, department_id, is_admin").eq("id", user.id).maybeSingle()
         .then(function (p) {
           if (p.error) throw new Error(p.error.message);
           return { id: user.id, email: user.email, profile: p.data };
@@ -90,6 +90,9 @@ window.HoccoAPI = (function () {
   function decideGate(gateId, decision, reasonId, upstream, note) {
     return rpc("decide_gate", { p_gate_id: gateId, p_decision: decision, p_reason_id: reasonId || null,
                                 p_upstream: !!upstream, p_note: note || null });
+  }
+  function setPriority(initiativeUuid, priority) {
+    return rpc("set_priority", { p_initiative_id: initiativeUuid, p_priority: priority });
   }
   function respondToBlocker(blockerId, action, note) {
     return rpc("respond_to_blocker", { p_blocker_id: blockerId, p_action: action, p_note: note || null });
@@ -441,7 +444,7 @@ window.HoccoAPI = (function () {
       }
 
       return {
-        id: slug, name: row.name, type: row.type, brand: row.brand_code,
+        id: slug, uuid: row.id, priority: row.priority, name: row.name, type: row.type, brand: row.brand_code,
         owner: dept(row.owner_department_id),
         launch: row.launch_on ? longDate(parseDate(row.launch_on)) : "Not set",
         elapsed: started ? daysBetween(started, today) : 0,
@@ -651,7 +654,7 @@ window.HoccoAPI = (function () {
 
     var late = init.late || 0;
     return {
-      id: init.id, name: init.name, type: init.type, brand: init.brand,
+      id: init.id, uuid: row.id, priority: row.priority, name: init.name, type: init.type, brand: init.brand,
       owner: dept(row.owner_department_id),
       launch: init.launch === "—" ? "Not set" : init.launch + " " + today.getFullYear(),
       elapsed: pending ? 0 : 12 + late,
@@ -665,5 +668,5 @@ window.HoccoAPI = (function () {
 
   return { load: load, me: me, signIn: signIn, signOut: signOut, setStageStatus: setStageStatus,
            raiseBlocker: raiseBlocker, notifications: notifications, markNotificationsRead: markNotificationsRead,
-           respondToBlocker: respondToBlocker, decideGate: decideGate };
+           respondToBlocker: respondToBlocker, decideGate: decideGate, setPriority: setPriority };
 })();

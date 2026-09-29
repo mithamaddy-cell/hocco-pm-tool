@@ -110,6 +110,7 @@
     <div class="glance__facts" id="gfacts"></div>
     <p class="diagnosis" id="gdiag"></p>
     <p class="meta" style="margin:var(--s3) 0 0" id="gowner"></p>
+    <div id="gprio"></div>
   </section>
 
   <div class="tabs" role="tablist" aria-label="Initiative views">
@@ -182,9 +183,19 @@
   <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-reject>Cancel</button>
 </div>
 
+<!-- ===================== PRIORITY SHEET (Leadership only) ===================== -->
+<div class="scrim" id="prio-scrim"></div>
+<div class="sheet" id="prio" role="dialog" aria-modal="true" aria-labelledby="prio-title" aria-hidden="true" data-open="false">
+  <div class="sheet__grip" aria-hidden="true"></div>
+  <h2 class="sheet__h" id="prio-title">Set priority</h2>
+  <p class="sheet__ctx" id="prio-ctx"></p>
+  <div id="prio-opts"></div>
+  <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-prio>Cancel</button>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=20"></script>
+<script src="hocco-api.js?v=21"></script>
 <script src="hocco-ui.js?v=12"></script>
 <script>
 (function () {
@@ -212,7 +223,7 @@
     document.getElementById("tracks").innerHTML = '<div class="emptyfilter" role="status">' + html + "</div>";
   }
   var glance = document.querySelector(".glance");
-  var myDept = null, lanesWired = false, lastD = null;
+  var myDept = null, canPrioritise = false, lanesWired = false, lastD = null, lastK = null;
   function start() {
     glance.hidden = true;           /* shown once there's an initiative to fill it */
     document.getElementById("bar-sub").textContent = "Loading…";
@@ -222,6 +233,7 @@
   function load() {
     window.HoccoAPI.me().catch(function () { return null; }).then(function (u) {
       myDept = u && u.profile ? u.profile.department_id : null;
+      canPrioritise = !!(u && u.profile && (u.profile.department_id === "leadership" || u.profile.is_admin));
       return window.HoccoAPI.load();
     }).then(function (D) {
       lastD = D;
@@ -249,6 +261,17 @@
      composed from their template (spec §6) until their tracks are added. */
   var real = !K.synthesized;
   glance.hidden = false;
+  lastK = K;
+
+  /* Priority — only Leadership (or an admin) sees this control. Everyone
+     else's view is unchanged: Portfolio and Detail stay read-only for them. */
+  document.getElementById("gprio").innerHTML = canPrioritise
+    ? '<div class="actions">' +
+        (K.priority
+          ? '<button class="btn btn--ghost" data-prio>Priority: ' + U.esc(K.priority) + " · Change</button>"
+          : '<button class="btn btn--primary" data-prio>Set priority</button>') +
+      "</div>"
+    : "";
   var disputed = D.blockers.filter(function (b) { return b.state === "disputed"; }).length;
 
   document.title = K.name + " — Hocco PM";
@@ -500,6 +523,31 @@
           "</div>") +
     "</div>";
   }
+
+  /* ================= Priority (Leadership only) ================= */
+  var prioSheet = U.sheet("prio");
+  var PRIO = [["High", "Needs resourcing now"], ["Medium", "Resource after High"], ["Low", "When capacity allows"]];
+  document.getElementById("gprio").addEventListener("click", function (e) {
+    if (!e.target.closest("[data-prio]") || !lastK) return;
+    document.getElementById("prio-ctx").textContent = lastK.name +
+      (lastK.priority ? " · currently " + lastK.priority : " · awaiting prioritisation");
+    document.getElementById("prio-opts").innerHTML = PRIO.map(function (p) {
+      var cur = lastK.priority === p[0];
+      return '<button class="sheet__opt" data-pick="' + p[0] + '"' + (cur ? ' aria-pressed="true" style="border-color:var(--raspberry-deep)"' : "") + ">" +
+        "<span>" + p[0] + (cur ? " (current)" : "") + "<small>" + p[1] + "</small></span></button>";
+    }).join("");
+    prioSheet.open();
+  });
+  prioSheet.el.addEventListener("click", function (e) {
+    if (e.target.closest("[data-close-prio]")) return prioSheet.close();
+    var pick = e.target.closest("[data-pick]");
+    if (!pick) return;
+    pick.disabled = true;
+    window.HoccoAPI.setPriority(lastK.uuid, pick.dataset.pick).then(function (r) {
+      prioSheet.close();
+      afterDecision(r.from ? "Priority changed to " + r.to + "." : "Prioritised as " + r.to + " — out of Awaiting prioritisation.");
+    }, function (err) { pick.disabled = false; U.toast(U.esc(err.message)); });
+  });
 
   var rejectSheet = U.sheet("reject");
   var rejecting = null, rejectReason = null, rejectUpstream = null;
