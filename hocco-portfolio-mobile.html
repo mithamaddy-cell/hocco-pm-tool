@@ -111,15 +111,59 @@
 
 <div id="nav"></div>
 
-<script src="hocco-data.js?v=12"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="hocco-config.js?v=13"></script>
+<script src="hocco-api.js?v=13"></script>
 <script src="hocco-ui.js?v=12"></script>
 <script>
 (function () {
-  var D = window.HOCCO, U = window.UI;
+  var U = window.UI;
+
+  /* ---- Tabs — work straight away, even while data loads ---- */
+  var tabs = [].slice.call(document.querySelectorAll(".tab"));
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () {
+      tabs.forEach(function (x) { x.setAttribute("aria-selected", String(x === t)); });
+      document.querySelectorAll(".panel").forEach(function (p) {
+        p.setAttribute("data-active", String(p.id === "p-" + t.dataset.panel));
+      });
+      window.scrollTo({ top: 0 });
+    });
+  });
+
+  /* ---- Loading / error states, in every panel ---- */
+  var SLOTS = ["bands", "cal", "depts"];
+  function message(html) {
+    SLOTS.forEach(function (id) {
+      document.getElementById(id).innerHTML = '<div class="emptyfilter" role="status">' + html + "</div>";
+    });
+  }
+  function start() {
+    document.getElementById("sub").textContent = "Loading…";
+    document.getElementById("strip").innerHTML = "";
+    message("Loading initiatives…");
+    window.HoccoAPI.load().then(render, function (err) {
+      if (window.console) console.error(err);
+      document.getElementById("sub").textContent = "Offline";
+      message("Couldn’t reach the database just now. Check your connection and try again." +
+              '<div style="margin-top:var(--s3)"><button class="btn btn--ghost" data-retry>Try again</button></div>');
+    });
+  }
+  document.addEventListener("click", function (e) { if (e.target.closest("[data-retry]")) start(); });
+  document.getElementById("nav").innerHTML = U.bottomNav("portfolio", 0);
+  start();
+
+  function render(D) {
   var c = D.counts();
+  var disputed = D.blockers.filter(function (b) { return b.state === "disputed"; }).length;
 
   document.getElementById("sub").textContent = D.initiatives.length + " live · " + D.today;
-  document.getElementById("nav").innerHTML = U.bottomNav("portfolio", 1);
+  document.getElementById("nav").innerHTML = U.bottomNav("portfolio", disputed);
+
+  if (!D.initiatives.length) {
+    message("No initiatives yet. Anything created with <b>New</b> will appear here.");
+    return;
+  }
 
   /* ---- Summary strip. §10 flags this as a real fork: leadership may want a
      tighter top-of-screen line rather than leading with cards. Both are here —
@@ -185,7 +229,7 @@
   /* ---- Departments ---- */
   document.getElementById("depts").innerHTML = D.departments.map(function (d) {
     var total = d.working + d.queued + d.blocked;
-    function pct(n) { return (n / total * 100).toFixed(1) + "%"; }
+    function pct(n) { return total ? (n / total * 100).toFixed(1) + "%" : "0%"; }
     return '<div class="glass dept">' +
       '<div class="dept__head"><span class="dept__name">' + U.esc(d.name) + "</span>" +
       '<span class="dept__total num">' + total + " items</span></div>" +
@@ -251,18 +295,7 @@
   }
   renderCalendar(function () { return true; });
   U.filters(document.getElementById("filter-c"), renderCalendar);
-
-  /* ---- Tabs ---- */
-  var tabs = [].slice.call(document.querySelectorAll(".tab"));
-  tabs.forEach(function (t) {
-    t.addEventListener("click", function () {
-      tabs.forEach(function (x) { x.setAttribute("aria-selected", String(x === t)); });
-      document.querySelectorAll(".panel").forEach(function (p) {
-        p.setAttribute("data-active", String(p.id === "p-" + t.dataset.panel));
-      });
-      window.scrollTo({ top: 0 });
-    });
-  });
+  }
 })();
 </script>
 </body>

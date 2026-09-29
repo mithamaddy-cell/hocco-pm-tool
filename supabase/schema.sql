@@ -124,6 +124,7 @@ create table public.stages (
                           ('queued', 'working', 'blocked', 'done')),
   note                  text,
   closed_on             date,
+  last_update_on        date,          -- used to spot "stale" stages (no update in 7+ days)
   unique (track_id, position)
 );
 
