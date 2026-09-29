@@ -163,11 +163,22 @@
   <div class="sheet__grip" aria-hidden="true"></div>
   <h2 class="sheet__h" id="account-name"></h2>
   <p class="sheet__ctx" id="account-ctx"></p>
-  <p class="meta" style="margin:0 0 var(--s4)">
-    Passwords are temporary while we test. Soon you’ll sign in with a link sent to your email — nothing to remember or change.
-  </p>
-  <button class="btn btn--primary btn--block" data-signout>Sign out</button>
-  <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-account>Close</button>
+  <div id="account-main">
+    <button class="btn btn--ghost btn--block" data-show-pw>Change password</button>
+    <button class="btn btn--primary btn--block" style="margin-top:var(--s2)" data-signout>Sign out</button>
+    <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-account>Close</button>
+  </div>
+  <form id="account-pw" hidden>
+    <label class="meta" for="pw-new">New password</label>
+    <input class="field" id="pw-new" type="password" autocomplete="new-password" minlength="8" required
+           style="min-height:44px;margin:4px 0 var(--s3)">
+    <label class="meta" for="pw-again">Type it again</label>
+    <input class="field" id="pw-again" type="password" autocomplete="new-password" minlength="8" required
+           style="min-height:44px;margin:4px 0 var(--s2)">
+    <p class="meta" style="margin:0 0 var(--s3)">At least 8 characters.</p>
+    <button class="btn btn--primary btn--block" type="submit">Save new password</button>
+    <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" type="button" data-hide-pw>Back</button>
+  </form>
 </div>
 
 <!-- ===================== NOTIFICATIONS SHEET =====================
@@ -183,7 +194,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=22"></script>
+<script src="hocco-api.js?v=23"></script>
 <script src="hocco-ui.js?v=12"></script>
 <script>
 (function () {
@@ -268,9 +279,35 @@
     document.getElementById("account-name").textContent = (user.profile && user.profile.full_name) || user.email;
     document.getElementById("account-ctx").textContent =
       (meDept && meDept.name ? meDept.name + " · " : "") + user.email;
+    showPwForm(false);
     accountSheet.open();
   });
+  function showPwForm(on) {
+    document.getElementById("account-main").hidden = on;
+    document.getElementById("account-pw").hidden = !on;
+    if (on) {
+      document.getElementById("pw-new").value = "";
+      document.getElementById("pw-again").value = "";
+      document.getElementById("pw-new").focus();
+    }
+  }
+  document.getElementById("account-pw").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var a = document.getElementById("pw-new").value, b = document.getElementById("pw-again").value;
+    if (a.length < 8) { U.toast("Use at least 8 characters."); return; }
+    if (a !== b) { U.toast("The two passwords don’t match."); return; }
+    var btn = e.target.querySelector("[type=submit]");
+    btn.disabled = true;
+    API.changePassword(a).then(function () {
+      btn.disabled = false;
+      showPwForm(false);
+      accountSheet.close();
+      U.toast("Password changed. Use the new one next time you sign in.");
+    }, function (err) { btn.disabled = false; U.toast(U.esc(err.message)); });
+  });
   accountSheet.el.addEventListener("click", function (e) {
+    if (e.target.closest("[data-show-pw]")) return showPwForm(true);
+    if (e.target.closest("[data-hide-pw]")) return showPwForm(false);
     if (e.target.closest("[data-close-account]")) return accountSheet.close();
     var out = e.target.closest("[data-signout]");
     if (!out) return;

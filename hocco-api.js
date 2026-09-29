@@ -66,6 +66,18 @@ window.HoccoAPI = (function () {
   }
   function signOut() { return client().auth.signOut(); }
 
+  /* Change the signed-in person's own password. */
+  function changePassword(newPassword) {
+    return client().auth.updateUser({ password: newPassword }).then(function (res) {
+      if (!res.error) return true;
+      var m = String(res.error.message || "");
+      if (/different from the old|same as/i.test(m)) throw new Error("That's the same as your current password — pick a new one.");
+      if (/at least|too short|weak/i.test(m)) throw new Error("That password is too weak. Use at least 8 characters.");
+      if (/reauthenticat|recent/i.test(m)) throw new Error("For safety, sign out and back in, then change it straight away.");
+      throw new Error("Couldn't change password: " + m);
+    });
+  }
+
   /* ---- Actions: each is a database function that checks the rules itself.
      The error text comes straight from the function, in plain words. ---- */
   function rpc(name, args) {
@@ -673,7 +685,8 @@ window.HoccoAPI = (function () {
     };
   }
 
-  return { load: load, me: me, signIn: signIn, signOut: signOut, setStageStatus: setStageStatus,
+  return { load: load, me: me, signIn: signIn, signOut: signOut, changePassword: changePassword,
+           setStageStatus: setStageStatus,
            raiseBlocker: raiseBlocker, notifications: notifications, markNotificationsRead: markNotificationsRead,
            respondToBlocker: respondToBlocker, decideGate: decideGate, setPriority: setPriority };
 })();
