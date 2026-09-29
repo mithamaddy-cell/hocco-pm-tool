@@ -148,26 +148,61 @@
   </div>
 </div>
 
-<script src="hocco-data.js?v=12"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="hocco-config.js?v=14"></script>
+<script src="hocco-api.js?v=16"></script>
 <script src="hocco-ui.js?v=12"></script>
 <script>
 (function () {
-  var D = window.HOCCO, U = window.UI, W = D.myWork;
+  var U = window.UI;
+  var ME = (window.HOCCO_CONFIG || {}).demoUser || {};
+  var D, W, meDept;
 
-  document.getElementById("sub").textContent = D.me.name + " · " + D.me.dept;
-  document.getElementById("avatar").textContent = D.me.initials;
-  document.getElementById("nav").innerHTML = U.bottomNav("mywork", 1);
+  document.getElementById("avatar").textContent = ME.initials || "";
+  document.getElementById("nav").innerHTML = U.bottomNav("mywork", 0);
+
+  /* ---- Loading / error ---- */
+  var ZONES = ["zone1", "zone2", "zone3"];
+  function message(html) {
+    ZONES.forEach(function (id) { document.getElementById(id).innerHTML = ""; });
+    document.getElementById("zone1").innerHTML = '<div class="emptyfilter" role="status">' + html + "</div>";
+  }
+  function start() {
+    document.getElementById("sub").textContent = "Loading…";
+    message("Loading your work…");
+    window.HoccoAPI.load().then(render, function (err) {
+      if (window.console) console.error(err);
+      document.getElementById("sub").textContent = "Offline";
+      message("Couldn’t reach the database just now. Check your connection and try again." +
+              '<div style="margin-top:var(--s3)"><button class="btn btn--ghost" data-retry>Try again</button></div>');
+    });
+  }
+  document.addEventListener("click", function (e) { if (e.target.closest("[data-retry]")) start(); });
+  start();
+
+  function render(data) {
+  D = data;
+  meDept = D.departmentList.filter(function (d) { return d.id === ME.department; })[0] || { id: ME.department, name: "" };
+  W = D.getMyWork(meDept.id);
+  var disputedAll = D.blockers.filter(function (b) { return b.state === "disputed"; }).length;
+  var disputedMine = W.waiting.filter(function (w) { return w.status === "disputed"; }).length;
+
+  document.getElementById("sub").textContent = (ME.name ? ME.name + " · " : "") + meDept.name;
+  document.getElementById("nav").innerHTML = U.bottomNav("mywork", disputedAll);
 
   document.getElementById("strip").innerHTML =
     '<div class="strip__cell"><div class="strip__n num">' + W.now.length + '</div><div class="strip__l">NEEDS YOU</div></div>' +
     '<div class="strip__cell strip__cell--wait"><div class="strip__n num">' + W.waiting.length + '</div><div class="strip__l">WAITING</div></div>' +
-    '<div class="strip__cell strip__cell--risk"><div class="strip__n num">1</div><div class="strip__l">DISPUTED</div></div>';
+    '<div class="strip__cell strip__cell--risk"><div class="strip__n num">' + disputedMine + '</div><div class="strip__l">DISPUTED</div></div>';
 
   /* A task's filterable attributes come from its parent initiative. */
   function initOf(t) { return D.byId[t.init_id] || D.byName[t.initiative] || null; }
   function keep(matchFn) { return function (t) { return matchFn(initOf(t)); }; }
 
-  function empty(label) { return '<div class="emptyfilter">No ' + label + " match the filter.</div>"; }
+  /* "Match the filter" only when a filter is what's hiding things. */
+  function empty(label, total) {
+    return '<div class="emptyfilter">' + (total ? "No " + label + " match the filter." : "Nothing here right now.") + "</div>";
+  }
 
   /* ---- Zone 1: actionable. Initiative is a label on the row (grouping by
      initiative only kicks in past ~6 rows, spec §7). ---- */
@@ -190,7 +225,7 @@
           (s.stale ? '<span class="meta" style="margin-left:auto">' + U.esc(s.stale) + "</span>" : "") +
         "</div>" +
       "</div>";
-    }).join("") : empty("tasks");
+    }).join("") : empty("tasks", W.now.length);
   }
 
   /* ---- Zone 2: the anti-blame zone ---- */
@@ -210,7 +245,7 @@
         (s.note ? '<div class="row__reason" style="margin-top:6px">' + U.esc(s.note) + "</div>" : "") +
         '<div class="row__foot"><span class="chip chip--init">' + U.esc(s.initiative) + "</span></div>" +
       "</a>";
-    }).join("") : empty("items");
+    }).join("") : empty("items", W.waiting.length);
   }
 
   /* ---- Zone 3: recessive ---- */
@@ -223,12 +258,26 @@
         '<span class="row__label">' + U.esc(s.when) + "</span></div>" +
         '<div class="row__foot"><span class="chip chip--init">' + U.esc(s.initiative) + "</span></div>" +
       "</div>";
-    }).join("") : empty("upcoming items");
+    }).join("") : empty("upcoming items", W.upcoming.length);
   }
 
   function renderAll(matchFn) { renderZone1(matchFn); renderZone2(matchFn); renderZone3(matchFn); }
   renderAll(function () { return true; });
   U.filters(document.getElementById("filter-mw"), renderAll);
+
+  /* Departments a blocker can be raised against — the rep's own is excluded. */
+  document.getElementById("who-opts").innerHTML =
+    D.departmentList.filter(function (d) { return d.id !== meDept.id && !d.leadership; })
+    .map(function (d) {
+      return '<button class="sheet__opt" data-who="' + U.esc(d.name) + '">' +
+        '<i class="dot" style="background:var(--wait)"></i>' +
+        "<span>" + U.esc(d.name) + "</span></button>";
+    }).join("");
+
+  document.getElementById("why-opts").innerHTML = D.blockerReasons.map(function (r) {
+    return '<button class="sheet__opt" data-why="' + U.esc(r) + '">' + U.esc(r) + "</button>";
+  }).join("");
+  }
 
   /* ================= Sheet behaviour ================= */
   var sheet = U.sheet("sheet");
@@ -324,19 +373,6 @@
     row.classList.add("row--present");
     u.remove();
   });
-
-  /* Departments a blocker can be raised against — the rep's own is excluded. */
-  document.getElementById("who-opts").innerHTML =
-    D.departments.filter(function (d) { return d.name !== D.me.dept; })
-    .map(function (d) {
-      return '<button class="sheet__opt" data-who="' + U.esc(d.name) + '">' +
-        '<i class="dot" style="background:var(--wait)"></i>' +
-        "<span>" + U.esc(d.name) + "</span></button>";
-    }).join("");
-
-  document.getElementById("why-opts").innerHTML = D.blockerReasons.map(function (r) {
-    return '<button class="sheet__opt" data-why="' + U.esc(r) + '">' + U.esc(r) + "</button>";
-  }).join("");
 
   document.getElementById("raise").addEventListener("click", function () {
     var who = pickedWho, why = pickedWhy;

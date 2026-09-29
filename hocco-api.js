@@ -144,10 +144,11 @@ window.HoccoAPI = (function () {
       q("gates",        "id, track_id, name, after_stage_position, status"),
       q("gate_reviews", "gate_id, revision, outcome, reviewer_department_id, reason, note, flags, reviewed_on"),
       q("blockers",     "id, initiative_id, title, raised_by_department_id, against_department_id, status, raised_on, note"),
-      q("track_dependencies", "blocking_track_id, blocked_track_id, critical, note")
+      q("track_dependencies", "blocking_track_id, blocked_track_id, critical, note"),
+      q("blocker_reasons", "id, label, sort_order")
     ]).then(function (r) {
       return build({ initiatives: r[0], departments: r[1], tracks: r[2], stages: r[3],
-                     gates: r[4], reviews: r[5], blockers: r[6], deps: r[7] });
+                     gates: r[4], reviews: r[5], blockers: r[6], deps: r[7], reasons: r[8] });
     });
   }
 
@@ -378,9 +379,76 @@ window.HoccoAPI = (function () {
       };
     }
 
+    /* ---- My Work for one department ---------------------------------------
+       Needs you now = your department's stages that are in progress, blocked,
+                       or next up (everything before them done, nothing
+                       upstream holding them).
+       Waiting       = blockers your department raised that aren't resolved.
+       Upcoming      = your department's stages that can't start yet.
+       Unprioritised initiatives are skipped — nothing is resourced yet. */
+    function getMyWork(deptId) {
+      var now = [], upcoming = [];
+      var initByUuid = {};
+      db.initiatives.forEach(function (i) { initByUuid[i.id] = i; });
+
+      db.tracks.forEach(function (t) {
+        var init = initByUuid[t.initiative_id];
+        if (!init || !init.priority) return;
+        var stages = (stagesByTrack[t.id] || []).slice().sort(function (a, b) { return a.position - b.position; });
+        var held = db.deps.some(function (d) {
+          return d.blocked_track_id === t.id && (trackById[d.blocking_track_id] || {}).status !== "done";
+        });
+        stages.forEach(function (s, si) {
+          if (s.department_id !== deptId && s.second_department_id !== deptId) return;
+          if (s.status === "done") return;
+          var before = stages.slice(0, si);
+          var ready = before.every(function (p) { return p.status === "done"; }) && !held;
+          var base = { id: s.id, title: s.name, initiative: init.name, init_id: init.slug,
+                       _launch: init.launch_on || "9999" };
+
+          if (s.status === "working" || s.status === "blocked" || ready) {
+            var failed = (gatesByTrack[t.id] || []).filter(function (g) { return g.status === "failed"; })[0];
+            var chips = s.status === "blocked" ? [["risk", failed ? "Rework" : "Blocked"]] : [];
+            var quiet = s.last_update_on ? daysBetween(parseDate(s.last_update_on), today) : 0;
+            now.push(Object.assign(base, {
+              tier: s.status === "blocked" ? "surface" : "present",
+              due: init.launch_on ? "Launch " + shortDate(init.launch_on) : "No date",
+              reason: s.status === "blocked" && failed ? gateReason(failed) : (s.note || ""),
+              chips: chips,
+              stale: quiet >= 3 ? "No update in " + quiet + " days" : null
+            }));
+          } else {
+            var prev = before.filter(function (p) { return p.status !== "done"; }).pop();
+            upcoming.push(Object.assign(base, {
+              when: held ? "After " + (trackById[(db.deps.filter(function (d) { return d.blocked_track_id === t.id; })[0] || {}).blocking_track_id] || {}).name
+                         : prev ? "After " + prev.name : "Queued"
+            }));
+          }
+        });
+      });
+
+      var waiting = db.blockers.filter(function (b) {
+        return b.raised_by_department_id === deptId && b.status !== "resolved";
+      }).map(function (b) {
+        var init = initByUuid[b.initiative_id] || {};
+        return { id: b.id, title: b.title, initiative: init.name, init_id: init.slug,
+                 tier: b.status === "disputed" ? "surface" : "present",
+                 who: dept(b.against_department_id), days: b.days, note: b.note || "",
+                 status: b.status };
+      }).sort(function (a, b) { return b.days - a.days; });
+
+      function byLaunch(a, b) { return a._launch < b._launch ? -1 : a._launch > b._launch ? 1 : 0; }
+      return { now: now.sort(byLaunch), waiting: waiting, upcoming: upcoming.sort(byLaunch) };
+    }
+
     var data = {
       today: longDate(today),
       getInitiative: getInitiative,
+      getMyWork: getMyWork,
+      blockerReasons: db.reasons.slice().sort(function (a, b) { return a.sort_order - b.sort_order; })
+        .map(function (r) { return r.label; }),
+      departmentList: db.departments.slice().sort(function (a, b) { return a.sort_order - b.sort_order; })
+        .map(function (d) { return { id: d.id, name: d.name, leadership: d.id === "leadership" }; }),
       initiatives: initiatives,
       departments: departments,
       blockers: blockers,

@@ -13,5 +13,9 @@ window.HOCCO_CONFIG = {
   /* The sample data is set on 11 Aug 2026. Staleness and "days blocked" are
      counted from this date. Set to null to use the real date once live data
      replaces the sample data. */
-  today: "2026-08-11"
+  today: "2026-08-11",
+
+  /* Stand-in for "who is logged in" until login is built (Phase 5).
+     My Work shows this department's work. */
+  demoUser: { name: "Aarti Shah", initials: "AS", department: "marketing" }
 };
