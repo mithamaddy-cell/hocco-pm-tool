@@ -8,3 +8,6 @@
 
 # Claude's local preview settings
 .claude/
+
+# Private local files (test passwords etc.) — never commit
+*.local.*
