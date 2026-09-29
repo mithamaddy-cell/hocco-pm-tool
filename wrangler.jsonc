@@ -4,6 +4,7 @@
 {
   "name": "hocco-pm-tool",
   "compatibility_date": "2026-09-01",
+  "workers_dev": true,          // keep the public address hocco-pm-tool.mithamaddy.workers.dev on
   "assets": {
     "directory": "./dist"
   }
