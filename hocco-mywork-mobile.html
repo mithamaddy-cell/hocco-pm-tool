@@ -133,8 +133,20 @@
       <i class="dot" style="background:var(--risk)"></i>
       <span>Blocked…<small>Say who it’s stuck with. Two taps.</small></span>
     </button>
+    <button class="sheet__opt" data-status="assign" id="opt-assign" style="display:none">
+      <i class="dot" style="background:var(--wait)"></i>
+      <span>Assign to…<small>Pick someone in your team</small></span>
+    </button>
     <a class="btn btn--ghost btn--block" style="margin-top:var(--s2)" id="view-init">View initiative →</a>
     <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close>Cancel</button>
+  </div>
+
+  <!-- Heads only: who does this step -->
+  <div class="step" id="step-assign">
+    <h2 class="sheet__h">Assign to</h2>
+    <p class="sheet__ctx" id="assign-ctx"></p>
+    <div id="assign-opts"></div>
+    <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-back="status">Back</button>
   </div>
 
   <!-- Step 2: who is it stuck with -->
@@ -194,12 +206,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=23"></script>
+<script src="hocco-api.js?v=24"></script>
 <script src="hocco-ui.js?v=12"></script>
 <script>
 (function () {
   var U = window.UI, API = window.HoccoAPI;
-  var D, W, meDept, user, filterCtl;
+  var D, W, meDept, user, filterCtl, isHead = false;
   var matchNow = function () { return true; };
 
   document.getElementById("nav").innerHTML = U.bottomNav("mywork", 0);
@@ -326,7 +338,8 @@
   D = data;
   meDept = D.departmentList.filter(function (d) { return d.id === user.profile.department_id; })[0] ||
            { id: user.profile.department_id, name: "" };
-  W = D.getMyWork(meDept.id);
+  isHead = user.profile.role === "head";
+  W = D.getMyWork(meDept.id, { userId: user.id, isHead: isHead });
   var disputedAll = D.blockers.filter(function (b) { return b.state === "disputed"; }).length;
   var disputedMine = W.waiting.filter(function (w) { return w.status === "disputed"; }).length;
 
@@ -355,10 +368,10 @@
   function renderZone1(matchFn) {
     var list = W.now.filter(keep(matchFn));
     document.getElementById("c1").textContent = list.length;
-    document.getElementById("zone1").innerHTML = list.length ? list.map(function (s) {
+    document.getElementById("zone1").innerHTML = (list.length ? list.map(function (s) {
       var icon = s.tier === "surface" ? '<span class="ico" aria-hidden="true">▲</span>' : "";
       var mods = (s.settled ? " row--settled" : "") + (s.unblocked ? " row--unblocked" : "");
-      return '<div class="row row--' + s.tier + mods + '" data-stage="' + s.id + '" data-title="' + U.esc(s.title) +
+      return '<div class="row row--' + s.tier + mods + '" data-stage="' + s.id + '" data-assignee="' + (s.assigneeId || "") + '" data-title="' + U.esc(s.title) +
              '" data-init="' + U.esc(s.initiative) + '" data-initid="' + U.esc(s.init_id) +
              '" role="button" tabindex="0">' +
         '<div class="row__head">' +
@@ -373,7 +386,13 @@
           (s.settled ? '<button class="undo" data-undo style="margin-left:auto">Undo</button>' : "") +
         "</div>" +
       "</div>";
-    }).join("") : empty("tasks", W.now.length);
+    }).join("") : empty("tasks", W.now.length)) +
+      /* Reps: say when there's department work nobody's been given yet. */
+      (!isHead && W.unassigned
+        ? '<p class="zonehint" style="margin-top:var(--s3)">' + W.unassigned + " more step" + (W.unassigned === 1 ? " in " : "s in ") +
+          U.esc(meDept.name) + " " + (W.unassigned === 1 ? "is" : "are") + " waiting for your head to assign " +
+          (W.unassigned === 1 ? "it" : "them") + ".</p>"
+        : "");
   }
 
   /* ---- Zone 2: the anti-blame zone ---- */
@@ -521,6 +540,7 @@
     if (!row || row.classList.contains("row--settled")) return;
     current = row;
     document.getElementById("sheet-ctx").textContent = row.dataset.title + " · " + row.dataset.init;
+    document.getElementById("opt-assign").style.display = isHead ? "" : "none";
     /* The row itself is the status control (spec §7), so the route to the
        parent initiative lives in the sheet rather than fighting it for the tap. */
     document.getElementById("view-init").href =
@@ -568,6 +588,7 @@
      A claim of completion is not closure. (spec §7) */
   function chooseStatus(status) {
     if (status === "blocked") return showStep("who");
+    if (status === "assign") return showAssign();
     var id = current.dataset.stage;
     sheet.close();
     API.setStageStatus(id, status === "done" ? "done" : "working").then(function (r) {
@@ -579,6 +600,33 @@
       return refresh();
     }, function (err) { U.toast(U.esc(err.message)); });
   }
+
+  /* Heads assign within their own team — the database checks it again. */
+  function showAssign() {
+    var cur = current.dataset.assignee;
+    document.getElementById("assign-ctx").textContent = current.dataset.title + " · " + current.dataset.init;
+    document.getElementById("assign-opts").innerHTML = W.team.map(function (p) {
+      var on = p.id === cur;
+      return '<button class="sheet__opt" data-assign="' + p.id + '"' +
+        (on ? ' aria-pressed="true" style="border-color:var(--raspberry-deep)"' : "") + ">" +
+        '<i class="dot" style="background:var(--indigo)"></i>' +
+        "<span>" + U.esc(p.name) + (p.id === user.id ? " (you)" : "") + (on ? " · current" : "") + "</span></button>";
+    }).join("") +
+    (cur ? '<button class="sheet__opt" data-assign=""><i class="dot" style="background:var(--wait)"></i>' +
+           "<span>Nobody<small>Take it off their list</small></span></button>" : "");
+    showStep("assign");
+  }
+  sheet.el.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-assign]");
+    if (!b) return;
+    b.disabled = true;
+    API.assignStage(current.dataset.stage, b.dataset.assign || null).then(function (r) {
+      sheet.close();
+      U.toast(U.esc(r.assignee ? "Assigned to " + r.assignee.replace(meDept.name + " · ", "") + ". They’ve been told."
+                               : "Unassigned."));
+      return refresh();
+    }, function (err) { b.disabled = false; U.toast(U.esc(err.message)); });
+  });
 
   /* Undo — no confirmation dialog for a reversible action. */
   document.getElementById("zone1").addEventListener("click", function (e) {

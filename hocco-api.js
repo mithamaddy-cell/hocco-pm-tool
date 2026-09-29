@@ -44,7 +44,7 @@ window.HoccoAPI = (function () {
     return sb.auth.getSession().then(function (res) {
       var user = res.data && res.data.session && res.data.session.user;
       if (!user) return null;
-      return sb.from("profiles").select("full_name, department_id, is_admin").eq("id", user.id).maybeSingle()
+      return sb.from("profiles").select("full_name, department_id, is_admin, role").eq("id", user.id).maybeSingle()
         .then(function (p) {
           if (p.error) throw new Error(p.error.message);
           return { id: user.id, email: user.email, profile: p.data };
@@ -112,6 +112,9 @@ window.HoccoAPI = (function () {
   }
   function setPriority(initiativeUuid, priority) {
     return rpc("set_priority", { p_initiative_id: initiativeUuid, p_priority: priority });
+  }
+  function assignStage(stageId, personId) {
+    return rpc("assign_stage", { p_stage_id: stageId, p_assignee: personId || null });
   }
   function respondToBlocker(blockerId, action, note) {
     return rpc("respond_to_blocker", { p_blocker_id: blockerId, p_action: action, p_note: note || null });
@@ -223,17 +226,19 @@ window.HoccoAPI = (function () {
       q("initiatives",  "id, slug, name, type, brand_code, owner_department_id, priority, launch_on, late_days, started_on, created_at, days_working, days_waiting, days_blocked"),
       q("departments",  "id, name, sort_order"),
       q("tracks",       "id, initiative_id, slug, name, department_id, position, status, summary"),
-      q("stages",       "id, track_id, name, position, department_id, second_department_id, status, note, closed_on, closed_at, unblocked_at, last_update_on"),
+      q("stages",       "id, track_id, name, position, department_id, second_department_id, status, note, closed_on, closed_at, unblocked_at, last_update_on, assignee_id"),
       q("gates",        "id, track_id, name, after_stage_position, department_id, status, is_milestone"),
       q("gate_reviews", "gate_id, revision, outcome, reviewer_department_id, reason, note, flags, reviewed_on"),
       q("blockers",     "id, initiative_id, title, raised_by_department_id, against_department_id, status, raised_on, acknowledged_on, note, dispute_note"),
       q("track_dependencies", "blocking_track_id, blocked_track_id, critical, note"),
       q("blocker_reasons", "id, label, sort_order"),
-      q("gate_rejection_reasons", "id, label, sort_order")
+      q("gate_rejection_reasons", "id, label, sort_order"),
+      /* People: only returned to signed-in users (logged-out visitors get none). */
+      q("profiles", "id, full_name, department_id, role")
     ]).then(function (r) {
       return build({ initiatives: r[0], departments: r[1], tracks: r[2], stages: r[3],
                      gates: r[4], reviews: r[5], blockers: r[6], deps: r[7], reasons: r[8],
-                     gateReasons: r[9] });
+                     gateReasons: r[9], people: r[10] });
     });
   }
 
@@ -486,8 +491,18 @@ window.HoccoAPI = (function () {
        Waiting       = blockers your department raised that aren't resolved.
        Upcoming      = your department's stages that can't start yet.
        Unprioritised initiatives are skipped — nothing is resourced yet. */
-    function getMyWork(deptId) {
-      var now = [], upcoming = [], completed = [];
+    /* opts.userId + opts.isHead: a head sees the whole department (with who
+       has what); a rep sees only the steps assigned to them. */
+    var personById = {};
+    (db.people || []).forEach(function (p) { personById[p.id] = p; });
+    function shortName(p) {             /* "Marketing · Rep 1" → "Rep 1" */
+      if (!p) return "";
+      var d = dept(p.department_id);
+      return p.full_name.indexOf(d + " · ") === 0 ? p.full_name.slice(d.length + 3) : p.full_name;
+    }
+    function getMyWork(deptId, opts) {
+      opts = opts || {};
+      var now = [], upcoming = [], completed = [], unassigned = 0;
       var initByUuid = {};
       db.initiatives.forEach(function (i) { initByUuid[i.id] = i; });
       var DAY = 86400000;
@@ -503,9 +518,16 @@ window.HoccoAPI = (function () {
         });
         stages.forEach(function (s, si) {
           if (s.department_id !== deptId && s.second_department_id !== deptId) return;
+          /* Reps only see what's assigned to them; count the rest. */
+          if (opts.userId && !opts.isHead && s.assignee_id !== opts.userId) {
+            if (!s.assignee_id && s.status !== "done") unassigned++;
+            return;
+          }
           var before = stages.slice(0, si);
+          var who = personById[s.assignee_id];
           var base = { id: s.id, title: s.name, initiative: init.name, init_id: init.slug,
-                       status: s.status, _launch: init.launch_on || "9999" };
+                       status: s.status, _launch: init.launch_on || "9999",
+                       assigneeId: s.assignee_id || null, assignee: who ? shortName(who) : null };
 
           /* Done: undoable (dimmed, on Needs you now) until it's closed —
              same rule as the database's stage_is_locked(). */
@@ -534,6 +556,7 @@ window.HoccoAPI = (function () {
             var chips = s.status === "blocked" ? [["risk", failed ? "Rework" : "Blocked"]]
                       : fresh ? [["news", "Now unblocked"]]
                       : s.status === "working" ? [["pending", "In progress"]] : [];
+            if (opts.isHead) chips = chips.concat([base.assignee ? ["queued", base.assignee] : ["pending", "Unassigned"]]);
             var quiet = s.last_update_on ? daysBetween(parseDate(s.last_update_on), today) : 0;
             now.push(Object.assign(base, {
               tier: s.status === "blocked" ? "surface" : "present",
@@ -566,7 +589,11 @@ window.HoccoAPI = (function () {
       }).sort(function (a, b) { return b.days - a.days; });
 
       function byLaunch(a, b) { return a._launch < b._launch ? -1 : a._launch > b._launch ? 1 : 0; }
-      return { now: now.sort(byLaunch), waiting: waiting, upcoming: upcoming.sort(byLaunch),
+      var team = (db.people || []).filter(function (p) { return p.department_id === deptId; })
+        .sort(function (a, b) { return (a.role === "head" ? 0 : 1) - (b.role === "head" ? 0 : 1) || a.full_name.localeCompare(b.full_name); })
+        .map(function (p) { return { id: p.id, name: shortName(p), head: p.role === "head" }; });
+      return { team: team, unassigned: unassigned,
+               now: now.sort(byLaunch), waiting: waiting, upcoming: upcoming.sort(byLaunch),
                completed: completed.sort(function (a, b) { return a._closed < b._closed ? 1 : -1; }) };
     }
 
@@ -688,5 +715,6 @@ window.HoccoAPI = (function () {
   return { load: load, me: me, signIn: signIn, signOut: signOut, changePassword: changePassword,
            setStageStatus: setStageStatus,
            raiseBlocker: raiseBlocker, notifications: notifications, markNotificationsRead: markNotificationsRead,
-           respondToBlocker: respondToBlocker, decideGate: decideGate, setPriority: setPriority };
+           respondToBlocker: respondToBlocker, decideGate: decideGate, setPriority: setPriority,
+           assignStage: assignStage };
 })();
