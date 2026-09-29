@@ -23,7 +23,9 @@ window.HoccoAPI = (function () {
   var STALE_DAYS = 7;
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+  var _sb = null;                               /* one connection per page */
   function client() {
+    if (_sb) return _sb;
     var cfg = window.HOCCO_CONFIG || {};
     if (!window.supabase || !window.supabase.createClient) {
       throw new Error("The database library didn't load. Check the internet connection.");
@@ -31,7 +33,42 @@ window.HoccoAPI = (function () {
     if (!cfg.supabaseUrl || !cfg.supabaseKey || /PASTE_/.test(cfg.supabaseKey)) {
       throw new Error("The database key hasn't been added to hocco-config.js yet.");
     }
-    return window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+    _sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+    return _sb;
+  }
+
+  /* ---- Signing in (test sign-in until Phase 5's real login) -------------- */
+  function me() {
+    var sb;
+    try { sb = client(); } catch (e) { return Promise.reject(e); }
+    return sb.auth.getSession().then(function (res) {
+      var user = res.data && res.data.session && res.data.session.user;
+      if (!user) return null;
+      return sb.from("profiles").select("full_name, department_id").eq("id", user.id).maybeSingle()
+        .then(function (p) {
+          if (p.error) throw new Error(p.error.message);
+          return { id: user.id, email: user.email, profile: p.data };
+        });
+    });
+  }
+  function signIn(email, password) {
+    return client().auth.signInWithPassword({ email: email, password: password }).then(function (res) {
+      if (res.error) throw new Error("That email and password don't match a test user.");
+      return me();
+    });
+  }
+  function signOut() { return client().auth.signOut(); }
+
+  /* ---- Actions: each is a database function that checks the rules itself.
+     The error text comes straight from the function, in plain words. ---- */
+  function rpc(name, args) {
+    return client().rpc(name, args).then(function (res) {
+      if (res.error) throw new Error(res.error.message);
+      return res.data;
+    });
+  }
+  function setStageStatus(stageId, status) {
+    return rpc("set_stage_status", { p_stage_id: stageId, p_status: status });
   }
 
   /* ---- Dates -------------------------------------------------------------- */
@@ -140,7 +177,7 @@ window.HoccoAPI = (function () {
       q("initiatives",  "id, slug, name, type, brand_code, owner_department_id, priority, launch_on, late_days, started_on, created_at, days_working, days_waiting, days_blocked"),
       q("departments",  "id, name, sort_order"),
       q("tracks",       "id, initiative_id, slug, name, department_id, position, status, summary"),
-      q("stages",       "id, track_id, name, position, department_id, second_department_id, status, note, closed_on, last_update_on"),
+      q("stages",       "id, track_id, name, position, department_id, second_department_id, status, note, closed_on, closed_at, unblocked_at, last_update_on"),
       q("gates",        "id, track_id, name, after_stage_position, status"),
       q("gate_reviews", "gate_id, revision, outcome, reviewer_department_id, reason, note, flags, reviewed_on"),
       q("blockers",     "id, initiative_id, title, raised_by_department_id, against_department_id, status, raised_on, note"),
@@ -387,33 +424,61 @@ window.HoccoAPI = (function () {
        Upcoming      = your department's stages that can't start yet.
        Unprioritised initiatives are skipped — nothing is resourced yet. */
     function getMyWork(deptId) {
-      var now = [], upcoming = [];
+      var now = [], upcoming = [], completed = [];
       var initByUuid = {};
       db.initiatives.forEach(function (i) { initByUuid[i.id] = i; });
+      var DAY = 86400000;
 
       db.tracks.forEach(function (t) {
         var init = initByUuid[t.initiative_id];
         if (!init || !init.priority) return;
         var stages = (stagesByTrack[t.id] || []).slice().sort(function (a, b) { return a.position - b.position; });
+        var gates = gatesByTrack[t.id] || [];
         var held = db.deps.some(function (d) {
-          return d.blocked_track_id === t.id && (trackById[d.blocking_track_id] || {}).status !== "done";
+          return d.blocked_track_id === t.id &&
+            (stagesByTrack[d.blocking_track_id] || []).some(function (z) { return z.status !== "done"; });
         });
         stages.forEach(function (s, si) {
           if (s.department_id !== deptId && s.second_department_id !== deptId) return;
-          if (s.status === "done") return;
           var before = stages.slice(0, si);
-          var ready = before.every(function (p) { return p.status === "done"; }) && !held;
           var base = { id: s.id, title: s.name, initiative: init.name, init_id: init.slug,
-                       _launch: init.launch_on || "9999" };
+                       status: s.status, _launch: init.launch_on || "9999" };
+
+          /* Done: undoable (dimmed, on Needs you now) until it's closed —
+             same rule as the database's stage_is_locked(). */
+          if (s.status === "done") {
+            var locked = !s.closed_at || (Date.now() - new Date(s.closed_at).getTime() > DAY) ||
+              stages.some(function (n) { return n.position > s.position && n.status !== "queued"; }) ||
+              gates.some(function (g) { return g.after_stage_position === s.position && g.status !== "pending"; });
+            if (locked) {
+              completed.push(Object.assign(base, { when: s.closed_on ? "Closed " + shortDate(s.closed_on) : "Closed",
+                                                   _closed: s.closed_at || s.closed_on || "" }));
+            } else {
+              now.push(Object.assign(base, {
+                tier: "recede", settled: true, due: init.launch_on ? "Launch " + shortDate(init.launch_on) : "No date",
+                reason: "Marked done · undoable until the next step starts", chips: [], stale: null
+              }));
+            }
+            return;
+          }
+
+          var ready = before.every(function (p) { return p.status === "done"; }) && !held &&
+            gates.every(function (g) { return g.after_stage_position >= s.position || g.status === "passed"; });
 
           if (s.status === "working" || s.status === "blocked" || ready) {
-            var failed = (gatesByTrack[t.id] || []).filter(function (g) { return g.status === "failed"; })[0];
-            var chips = s.status === "blocked" ? [["risk", failed ? "Rework" : "Blocked"]] : [];
+            var failed = gates.filter(function (g) { return g.status === "failed"; })[0];
+            var fresh = s.status === "queued" && !!s.unblocked_at;
+            var chips = s.status === "blocked" ? [["risk", failed ? "Rework" : "Blocked"]]
+                      : fresh ? [["news", "Now unblocked"]]
+                      : s.status === "working" ? [["pending", "In progress"]] : [];
             var quiet = s.last_update_on ? daysBetween(parseDate(s.last_update_on), today) : 0;
             now.push(Object.assign(base, {
               tier: s.status === "blocked" ? "surface" : "present",
+              unblocked: fresh,
               due: init.launch_on ? "Launch " + shortDate(init.launch_on) : "No date",
-              reason: s.status === "blocked" && failed ? gateReason(failed) : (s.note || ""),
+              reason: s.status === "blocked" && failed ? gateReason(failed)
+                    : s.status === "queued" ? "Ready to start"
+                    : (s.note || ""),
               chips: chips,
               stale: quiet >= 3 ? "No update in " + quiet + " days" : null
             }));
@@ -438,7 +503,8 @@ window.HoccoAPI = (function () {
       }).sort(function (a, b) { return b.days - a.days; });
 
       function byLaunch(a, b) { return a._launch < b._launch ? -1 : a._launch > b._launch ? 1 : 0; }
-      return { now: now.sort(byLaunch), waiting: waiting, upcoming: upcoming.sort(byLaunch) };
+      return { now: now.sort(byLaunch), waiting: waiting, upcoming: upcoming.sort(byLaunch),
+               completed: completed.sort(function (a, b) { return a._closed < b._closed ? 1 : -1; }) };
     }
 
     var data = {
@@ -548,5 +614,5 @@ window.HoccoAPI = (function () {
     };
   }
 
-  return { load: load };
+  return { load: load, me: me, signIn: signIn, signOut: signOut, setStageStatus: setStageStatus };
 })();

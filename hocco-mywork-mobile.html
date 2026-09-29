@@ -91,6 +91,15 @@
     <div id="zone3" style="margin-top:var(--s3)"></div>
   </details>
 
+  <details class="upcoming section">
+    <summary class="section__head">
+      <span class="eyebrow">Completed</span>
+      <span class="count num" id="c4"></span>
+      <span class="caret" aria-hidden="true">▶</span>
+    </summary>
+    <div id="zone4" style="margin-top:var(--s3)"></div>
+  </details>
+
   <hr class="divider">
   <p class="meta" style="text-align:center">
     Nothing here is a scoreboard. Status you give is used to explain delay, not to rank people.
@@ -149,45 +158,102 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="hocco-config.js?v=14"></script>
-<script src="hocco-api.js?v=16"></script>
+<script src="hocco-config.js?v=15"></script>
+<script src="hocco-api.js?v=17"></script>
 <script src="hocco-ui.js?v=12"></script>
 <script>
 (function () {
-  var U = window.UI;
-  var ME = (window.HOCCO_CONFIG || {}).demoUser || {};
-  var D, W, meDept;
+  var U = window.UI, API = window.HoccoAPI;
+  var D, W, meDept, user, filterCtl;
+  var matchNow = function () { return true; };
 
-  document.getElementById("avatar").textContent = ME.initials || "";
   document.getElementById("nav").innerHTML = U.bottomNav("mywork", 0);
 
-  /* ---- Loading / error ---- */
-  var ZONES = ["zone1", "zone2", "zone3"];
-  function message(html) {
+  /* ---- Loading / error / signed out ---- */
+  var ZONES = ["zone1", "zone2", "zone3", "zone4"];
+  function clearAll() {
     ZONES.forEach(function (id) { document.getElementById(id).innerHTML = ""; });
+    ["c1", "c2", "c3", "c4"].forEach(function (id) { document.getElementById(id).textContent = ""; });
+    document.getElementById("strip").innerHTML = "";
+  }
+  function message(html) {
+    clearAll();
     document.getElementById("zone1").innerHTML = '<div class="emptyfilter" role="status">' + html + "</div>";
   }
+  function offline(err) {
+    if (window.console) console.error(err);
+    document.getElementById("sub").textContent = "Offline";
+    message("Couldn’t reach the database just now. Check your connection and try again." +
+            '<div style="margin-top:var(--s3)"><button class="btn btn--ghost" data-retry>Try again</button></div>');
+  }
+  function initials(name) {
+    return String(name || "").split(/[^A-Za-z]+/).filter(Boolean).map(function (w) { return w[0]; })
+      .join("").slice(0, 2).toUpperCase();
+  }
+
   function start() {
     document.getElementById("sub").textContent = "Loading…";
     message("Loading your work…");
-    window.HoccoAPI.load().then(render, function (err) {
-      if (window.console) console.error(err);
-      document.getElementById("sub").textContent = "Offline";
-      message("Couldn’t reach the database just now. Check your connection and try again." +
-              '<div style="margin-top:var(--s3)"><button class="btn btn--ghost" data-retry>Try again</button></div>');
-    });
+    API.me().then(function (u) {
+      user = u;
+      if (!u) return showSignIn();
+      if (!u.profile) {
+        document.getElementById("sub").textContent = u.email;
+        message("This account isn’t linked to a department yet.");
+        return;
+      }
+      return API.load().then(render);
+    }).catch(offline);
   }
+  function refresh() { return API.load().then(render).catch(offline); }
+
+  /* Test sign-in — stands in until Phase 5's real login screen. */
+  function showSignIn(err) {
+    document.getElementById("sub").textContent = "Not signed in";
+    document.getElementById("avatar").textContent = "";
+    clearAll();
+    document.getElementById("zone1").innerHTML =
+      '<form id="signin" class="glass" style="padding:var(--s4);border-radius:var(--r-md)">' +
+        '<p class="h3" style="margin-bottom:var(--s2)">Sign in to update your work</p>' +
+        '<p class="meta" style="margin:0 0 var(--s3)">Test sign-in — use one of the test users.</p>' +
+        (err ? '<p class="meta" role="alert" style="color:var(--risk);margin:0 0 var(--s3)">▲ ' + U.esc(err) + "</p>" : "") +
+        '<label class="meta" for="si-email">Email</label>' +
+        '<input class="field" id="si-email" type="email" autocomplete="username" required style="min-height:44px;margin:4px 0 var(--s3)">' +
+        '<label class="meta" for="si-pw">Password</label>' +
+        '<input class="field" id="si-pw" type="password" autocomplete="current-password" required style="min-height:44px;margin:4px 0 var(--s3)">' +
+        '<button class="btn btn--primary btn--block" type="submit">Sign in</button>' +
+      "</form>";
+  }
+  document.addEventListener("submit", function (e) {
+    if (e.target.id !== "signin") return;
+    e.preventDefault();
+    var email = document.getElementById("si-email").value.trim();
+    var pw = document.getElementById("si-pw").value;
+    e.target.querySelector("button").textContent = "Signing in…";
+    API.signIn(email, pw).then(start, function (err) { showSignIn(err.message); });
+  });
+  document.getElementById("avatar").addEventListener("click", function (e) {
+    e.preventDefault();
+    if (!user) return;
+    if (window.confirm("Sign out of " + ((user.profile && user.profile.full_name) || user.email) + "?")) {
+      API.signOut().then(start);
+    }
+  });
   document.addEventListener("click", function (e) { if (e.target.closest("[data-retry]")) start(); });
   start();
 
   function render(data) {
   D = data;
-  meDept = D.departmentList.filter(function (d) { return d.id === ME.department; })[0] || { id: ME.department, name: "" };
+  meDept = D.departmentList.filter(function (d) { return d.id === user.profile.department_id; })[0] ||
+           { id: user.profile.department_id, name: "" };
   W = D.getMyWork(meDept.id);
   var disputedAll = D.blockers.filter(function (b) { return b.state === "disputed"; }).length;
   var disputedMine = W.waiting.filter(function (w) { return w.status === "disputed"; }).length;
 
-  document.getElementById("sub").textContent = (ME.name ? ME.name + " · " : "") + meDept.name;
+  var name = user.profile.full_name || "";
+  document.getElementById("sub").textContent =
+    name.indexOf(meDept.name) > -1 ? name : (name ? name + " · " : "") + meDept.name;
+  document.getElementById("avatar").textContent = initials(name);
   document.getElementById("nav").innerHTML = U.bottomNav("mywork", disputedAll);
 
   document.getElementById("strip").innerHTML =
@@ -211,7 +277,8 @@
     document.getElementById("c1").textContent = list.length;
     document.getElementById("zone1").innerHTML = list.length ? list.map(function (s) {
       var icon = s.tier === "surface" ? '<span class="ico" aria-hidden="true">▲</span>' : "";
-      return '<div class="row row--' + s.tier + '" data-stage="' + s.id + '" data-title="' + U.esc(s.title) +
+      var mods = (s.settled ? " row--settled" : "") + (s.unblocked ? " row--unblocked" : "");
+      return '<div class="row row--' + s.tier + mods + '" data-stage="' + s.id + '" data-title="' + U.esc(s.title) +
              '" data-init="' + U.esc(s.initiative) + '" data-initid="' + U.esc(s.init_id) +
              '" role="button" tabindex="0">' +
         '<div class="row__head">' +
@@ -223,6 +290,7 @@
           '<span class="chip chip--init">' + U.esc(s.initiative) + "</span>" +
           s.chips.map(function (c) { return '<span class="chip chip--' + c[0] + '">' + U.esc(c[1]) + "</span>"; }).join("") +
           (s.stale ? '<span class="meta" style="margin-left:auto">' + U.esc(s.stale) + "</span>" : "") +
+          (s.settled ? '<button class="undo" data-undo style="margin-left:auto">Undo</button>' : "") +
         "</div>" +
       "</div>";
     }).join("") : empty("tasks", W.now.length);
@@ -261,9 +329,26 @@
     }).join("") : empty("upcoming items", W.upcoming.length);
   }
 
-  function renderAll(matchFn) { renderZone1(matchFn); renderZone2(matchFn); renderZone3(matchFn); }
-  renderAll(function () { return true; });
-  U.filters(document.getElementById("filter-mw"), renderAll);
+  /* ---- Completed: closed stages, most recent first ---- */
+  function renderZone4(matchFn) {
+    var list = W.completed.filter(keep(matchFn));
+    document.getElementById("c4").textContent = list.length;
+    document.getElementById("zone4").innerHTML = list.length ? list.map(function (s) {
+      return '<div class="row row--recede">' +
+        '<div class="row__head"><span class="row__title">' + U.esc(s.title) + "</span>" +
+        '<span class="row__label">' + U.esc(s.when) + "</span></div>" +
+        '<div class="row__foot"><span class="chip chip--init">' + U.esc(s.initiative) + "</span>" +
+          '<span class="chip chip--ok">✓ Done</span></div>' +
+      "</div>";
+    }).join("") : empty("completed items", W.completed.length);
+  }
+
+  function renderAll(matchFn) {
+    matchNow = matchFn;
+    renderZone1(matchFn); renderZone2(matchFn); renderZone3(matchFn); renderZone4(matchFn);
+  }
+  renderAll(matchNow);
+  if (!filterCtl) filterCtl = U.filters(document.getElementById("filter-mw"), renderAll);
 
   /* Departments a blocker can be raised against — the rep's own is excluded. */
   document.getElementById("who-opts").innerHTML =
@@ -299,8 +384,9 @@
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openFromRow(e); }
   });
   function openFromRow(e) {
+    if (e.target.closest("[data-undo]")) return;
     var row = e.target.closest("[data-stage]");
-    if (!row) return;
+    if (!row || row.classList.contains("row--settled")) return;
     current = row;
     document.getElementById("sheet-ctx").textContent = row.dataset.title + " · " + row.dataset.init;
     /* The row itself is the status control (spec §7), so the route to the
@@ -341,37 +427,34 @@
     }
   });
 
+  /* In progress / Done are saved by the database, which checks the rules
+     (right department, step actually startable) and logs the change.
+     Done lingers, dimmed and undoable, until the stage is genuinely closed.
+     A claim of completion is not closure. (spec §7) */
   function chooseStatus(status) {
     if (status === "blocked") return showStep("who");
-
-    if (status === "done") {
-      /* Done lingers, dimmed and undoable, until the stage is genuinely
-         closed. A claim of completion is not closure. (spec §7) */
-      current.classList.remove("row--surface", "row--present");
-      current.classList.add("row--recede", "row--settled");
-      var foot = current.querySelector(".row__foot");
-      foot.insertAdjacentHTML("beforeend",
-        '<button class="undo" style="margin-left:auto">Undo</button>');
-      sheet.close();
-      U.toast("Marked done. Stays undoable until the stage closes.");
-      return;
-    }
-
-    current.querySelector(".row__foot").insertAdjacentHTML("afterbegin",
-      '<span class="chip chip--pending">In progress</span>');
+    var id = current.dataset.stage;
     sheet.close();
-    U.toast("Status updated.");
+    API.setStageStatus(id, status === "done" ? "done" : "working").then(function (r) {
+      var msg = r.status === "done"
+        ? "Marked done. Stays undoable until the next step starts."
+        : "“" + r.stage + "” is in progress.";
+      if (r.unblocked && r.unblocked.length) msg += " Now unblocked: " + r.unblocked.join(", ") + ".";
+      U.toast(U.esc(msg));
+      return refresh();
+    }, function (err) { U.toast(U.esc(err.message)); });
   }
 
   /* Undo — no confirmation dialog for a reversible action. */
   document.getElementById("zone1").addEventListener("click", function (e) {
-    var u = e.target.closest(".undo");
+    var u = e.target.closest("[data-undo]");
     if (!u) return;
-    e.stopPropagation();
-    var row = u.closest(".row");
-    row.classList.remove("row--recede", "row--settled");
-    row.classList.add("row--present");
-    u.remove();
+    var id = u.closest("[data-stage]").dataset.stage;
+    u.disabled = true;
+    API.setStageStatus(id, "working").then(function () {
+      U.toast("Undone. Back to in progress.");
+      return refresh();
+    }, function (err) { u.disabled = false; U.toast(U.esc(err.message)); });
   });
 
   document.getElementById("raise").addEventListener("click", function () {
