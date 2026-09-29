@@ -68,7 +68,7 @@
     API.signIn(document.getElementById("si-email").value.trim(), document.getElementById("si-pw").value)
       .then(function (u) {
         if (!u || !u.profile) {
-          return API.signOut().then(function () { form("This account isn’t linked to a department yet. Ask an admin."); });
+          return API.signOut().then(function () { form("This account isn’t active in the app — it may not be set up yet, or it’s been deactivated. Ask an admin."); });
         }
         go(u);
       }, function (err) { form(err.message); });
@@ -77,7 +77,7 @@
   /* Already signed in? Go straight through. */
   API.me().then(function (u) {
     if (u && u.profile) return go(u);
-    if (u) return API.signOut().then(function () { form("This account isn’t linked to a department yet. Ask an admin."); });
+    if (u) return API.signOut().then(function () { form("This account isn’t active in the app — it may not be set up yet, or it’s been deactivated. Ask an admin."); });
     form();
   }, function () {
     document.getElementById("door").innerHTML =
