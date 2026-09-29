@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin — Hocco PM</title>
+<script src="hocco-theme.js?v=12"></script>
+<link rel="stylesheet" href="hocco-tokens.css?v=12">
+<style>
+  /* Same values as My Work / Blockers — no new visuals */
+  .avatar {
+    width: var(--touch); height: var(--touch); border-radius: var(--r-pill);
+    background: var(--indigo); color: #fff; display: grid; place-items: center;
+    font-size: 13px; font-weight: 720; letter-spacing: 0.02em; flex: none;
+    text-decoration: none;
+  }
+  .sheet__ctx { font-size: 12.5px; color: var(--ink-3); margin: 0 0 var(--s4); }
+  .sheet__h { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 2px; }
+  .field { width: 100%; font: inherit; font-size: 14.5px; color: var(--ink);
+           background: var(--glass-faint); border: 1px solid var(--edge-strong);
+           border-radius: var(--r-md); padding: var(--s3); min-height: 44px; margin: 4px 0 var(--s3); }
+  .opts2 { display: flex; gap: var(--s2); }
+  .opts2 .sheet__opt { flex: 1; }
+</style>
+</head>
+<body>
+<div class="ground" aria-hidden="true"></div>
+
+<header class="appbar">
+  <a class="iconbtn" href="hocco-mywork-mobile.html" id="back" aria-label="Back">‹</a>
+  <div style="flex:1;min-width:0">
+    <h1 class="appbar__title">Admin</h1>
+    <div class="appbar__sub" id="sub">People &amp; access</div>
+  </div>
+  <a class="avatar" href="#" id="avatar" aria-label="Account menu"></a>
+</header>
+
+<main class="frame screen">
+  <div id="top"></div>
+  <div id="people"></div>
+  <hr class="divider">
+  <p class="meta" style="text-align:center">
+    Heads assign their department’s work. Deactivating someone cuts off access at once and hands
+    their unfinished steps back to their head.
+  </p>
+</main>
+
+<div id="nav"></div>
+
+<!-- ===================== ONE PERSON ===================== -->
+<div class="scrim" id="person-scrim"></div>
+<div class="sheet" id="person" role="dialog" aria-modal="true" aria-labelledby="person-name" aria-hidden="true" data-open="false">
+  <div class="sheet__grip" aria-hidden="true"></div>
+  <h2 class="sheet__h" id="person-name"></h2>
+  <p class="sheet__ctx" id="person-ctx"></p>
+  <p class="meta" style="margin:0 0 var(--s2)">Covering for another department</p>
+  <div id="person-cover"></div>
+  <button class="btn btn--ghost btn--block" style="margin-top:var(--s3)" id="person-active"></button>
+  <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-person>Close</button>
+</div>
+
+<!-- ===================== ADD A PERSON ===================== -->
+<div class="scrim" id="add-scrim"></div>
+<div class="sheet" id="add" role="dialog" aria-modal="true" aria-labelledby="add-title" aria-hidden="true" data-open="false">
+  <div class="sheet__grip" aria-hidden="true"></div>
+  <h2 class="sheet__h" id="add-title">Add a person</h2>
+  <p class="sheet__ctx">They sign in with this email and the temporary password, then change it from their account menu.</p>
+  <form id="add-form">
+    <label class="meta" for="add-name">Name</label>
+    <input class="field" id="add-name" autocomplete="off" required>
+    <label class="meta" for="add-email">Work email</label>
+    <input class="field" id="add-email" type="email" autocomplete="off" required>
+    <p class="meta" style="margin:0 0 var(--s2)">Department</p>
+    <div id="add-depts"></div>
+    <p class="meta" style="margin:var(--s3) 0 var(--s2)">Role</p>
+    <div class="opts2">
+      <button type="button" class="sheet__opt" data-role="member">Rep</button>
+      <button type="button" class="sheet__opt" data-role="head">Head</button>
+    </div>
+    <label class="meta" for="add-pw" style="display:block;margin-top:var(--s3)">Temporary password</label>
+    <input class="field" id="add-pw" autocomplete="off" minlength="8" required>
+    <button type="button" class="btn btn--ghost btn--block" id="add-suggest">Suggest a password</button>
+    <button type="submit" class="btn btn--primary btn--block" style="margin-top:var(--s3)">Add person</button>
+    <button type="button" class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-add>Cancel</button>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="hocco-config.js?v=15"></script>
+<script src="hocco-api.js?v=26"></script>
+<script src="hocco-ui.js?v=14"></script>
+<script>
+(function () {
+  var U = window.UI, API = window.HoccoAPI;
+  var user = null, people = [], depts = [], deptName = {};
+  var current = null, addDept = null, addRole = null;
+
+  document.getElementById("nav").innerHTML = U.bottomNav("", 0);
+
+  function message(html) {
+    document.getElementById("top").innerHTML = "";
+    document.getElementById("people").innerHTML = '<div class="emptyfilter" role="status">' + html + "</div>";
+  }
+
+  function start() {
+    message("Loading people…");
+    API.requireSignIn().then(function (u) {
+      user = u;
+      document.getElementById("avatar").textContent = U.initials(u.profile.full_name);
+      if (!u.profile.is_admin) {
+        message("Only admins can open this page." +
+                '<div style="margin-top:var(--s3)"><a class="btn btn--ghost" href="' + API.landingFor(u) + '">Back to the app</a></div>');
+        return;
+      }
+      return Promise.all([API.adminListPeople(), API.load()]).then(function (r) {
+        people = r[0];
+        depts = r[1].departmentList;
+        depts.forEach(function (d) { deptName[d.id] = d.name; });
+        render();
+      });
+    }).catch(function (err) {
+      if (window.console) console.error(err);
+      message("Couldn’t load people just now. " + U.esc(err.message) +
+              '<div style="margin-top:var(--s3)"><button class="btn btn--ghost" data-retry>Try again</button></div>');
+    });
+  }
+  function refresh() {
+    return API.adminListPeople().then(function (list) { people = list; render(); });
+  }
+  document.addEventListener("click", function (e) { if (e.target.closest("[data-retry]")) start(); });
+  document.getElementById("avatar").addEventListener("click", function (e) {
+    e.preventDefault();
+    if (user) U.account(user, deptName[user.profile.department_id] || "");
+  });
+  start();
+
+  function shortDate(ts) {
+    var d = new Date(ts);
+    return d.getDate() + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+  }
+
+  /* ---- The list: one section per department ---- */
+  function render() {
+    var active = people.filter(function (p) { return p.active; }).length;
+    document.getElementById("sub").textContent = active + " active · " + (people.length - active) + " deactivated";
+    document.getElementById("top").innerHTML =
+      '<button class="btn btn--primary btn--block" id="open-add" style="margin-bottom:var(--s5)">Add a person</button>';
+
+    document.getElementById("people").innerHTML = depts.map(function (d) {
+      var list = people.filter(function (p) { return p.department_id === d.id; });
+      return '<section class="section">' +
+        '<div class="section__head"><p class="eyebrow">' + U.esc(d.name) + '</p><span class="count num">' + list.length + "</span></div>" +
+        (list.length ? list.map(row).join("") : '<div class="emptyfilter">Nobody yet.</div>') +
+      "</section>";
+    }).join("");
+  }
+
+  function row(p) {
+    var chips = [
+      p.role === "head" ? '<span class="chip chip--init">Head</span>' : '<span class="chip chip--queued">Rep</span>',
+      p.is_admin ? '<span class="chip chip--init">Admin</span>' : "",
+      p.covering_department_id ? '<span class="chip chip--pending">Covering ' + U.esc(deptName[p.covering_department_id] || "") + "</span>" : "",
+      !p.active ? '<span class="chip chip--risk">▲ Deactivated</span>' : ""
+    ].join("");
+    return '<div class="row row--' + (p.active ? "present" : "recede") + '" data-person="' + p.id + '" role="button" tabindex="0">' +
+      '<div class="row__head"><span class="row__title">' + U.esc(p.full_name) + (p.id === user.id ? " (you)" : "") + "</span>" +
+        '<span class="row__label">' + (p.last_sign_in_at ? "Signed in " + shortDate(p.last_sign_in_at) : "Never signed in") + "</span></div>" +
+      '<div class="row__reason"><span>' + U.esc(p.email) + "</span></div>" +
+      '<div class="row__foot">' + chips + "</div>" +
+    "</div>";
+  }
+
+  /* ---- One person: cover + deactivate / reactivate ---- */
+  var personSheet = U.sheet("person");
+  document.getElementById("people").addEventListener("click", openPerson);
+  document.getElementById("people").addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPerson(e); }
+  });
+  function openPerson(e) {
+    var r = e.target.closest("[data-person]");
+    if (!r) return;
+    current = people.filter(function (p) { return p.id === r.dataset.person; })[0];
+    if (!current) return;
+    document.getElementById("person-name").textContent = current.full_name;
+    document.getElementById("person-ctx").textContent =
+      (deptName[current.department_id] || "") + " · " + (current.role === "head" ? "Head" : "Rep") + " · " + current.email;
+    paintCover();
+    var b = document.getElementById("person-active");
+    b.textContent = current.active ? "Deactivate" : "Reactivate";
+    b.style.display = current.id === user.id && current.active ? "none" : "";
+    personSheet.open();
+  }
+  function paintCover() {
+    var opts = depts.filter(function (d) { return d.id !== current.department_id; })
+      .map(function (d) { return [d.id, d.name]; }).concat([["", "Not covering"]]);
+    document.getElementById("person-cover").innerHTML = opts.map(function (o) {
+      var on = (current.covering_department_id || "") === o[0];
+      return '<button class="sheet__opt" data-cover="' + o[0] + '"' + (current.active ? "" : " disabled") +
+        (on ? ' aria-pressed="true" style="border-color:var(--raspberry-deep)"' : "") + ">" +
+        U.esc(o[1]) + (on ? " · current" : "") + "</button>";
+    }).join("");
+  }
+  personSheet.el.addEventListener("click", function (e) {
+    if (e.target.closest("[data-close-person]")) return personSheet.close();
+    var c = e.target.closest("[data-cover]");
+    if (c) {
+      if ((current.covering_department_id || "") === c.dataset.cover) return;
+      c.disabled = true;
+      API.adminSetCovering(current.id, c.dataset.cover || null).then(function (r) {
+        personSheet.close();
+        U.toast(U.esc(r.covering ? r.name + " is now covering " + (deptName[r.covering] || "") + "."
+                                 : r.name + " is no longer covering another department."));
+        return refresh();
+      }, function (err) { c.disabled = false; U.toast(U.esc(err.message)); });
+      return;
+    }
+    if (e.target.closest("#person-active")) {
+      var turnOff = current.active;
+      if (turnOff && !window.confirm("Deactivate " + current.full_name + "? They lose access immediately, and their unfinished steps go back to their head.")) return;
+      API.adminSetActive(current.id, !turnOff).then(function (r) {
+        personSheet.close();
+        U.toast(U.esc(r.active ? r.name + " can sign in again."
+          : r.name + " is deactivated." + (r.steps_unassigned > 0 ? " " + r.steps_unassigned + " step(s) went back to unassigned." : "")));
+        return refresh();
+      }, function (err) { U.toast(U.esc(err.message)); });
+    }
+  });
+
+  /* ---- Add a person ---- */
+  var addSheet = U.sheet("add");
+  function paintAdd() {
+    document.getElementById("add-depts").innerHTML = depts.map(function (d) {
+      var on = addDept === d.id;
+      return '<button type="button" class="sheet__opt" data-dept="' + d.id + '"' +
+        (on ? ' aria-pressed="true" style="border-color:var(--raspberry-deep);background:var(--glass-strong)"' : "") + ">" +
+        U.esc(d.name) + "</button>";
+    }).join("");
+    document.querySelectorAll("#add [data-role]").forEach(function (b) {
+      var on = addRole === b.dataset.role;
+      b.style.borderColor = on ? "var(--raspberry-deep)" : "";
+      b.style.background = on ? "var(--glass-strong)" : "";
+      b.setAttribute("aria-pressed", String(on));
+    });
+  }
+  function suggest() {
+    var chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789", a = new Uint32Array(10), out = "Hocco-";
+    window.crypto.getRandomValues(a);
+    for (var i = 0; i < a.length; i++) out += chars[a[i] % chars.length];
+    return out;
+  }
+  document.getElementById("top").addEventListener("click", function (e) {
+    if (!e.target.closest("#open-add")) return;
+    addDept = null; addRole = "member";
+    document.getElementById("add-form").reset();
+    paintAdd();
+    addSheet.open();
+  });
+  addSheet.el.addEventListener("click", function (e) {
+    if (e.target.closest("[data-close-add]")) return addSheet.close();
+    var d = e.target.closest("[data-dept]");
+    if (d) { addDept = d.dataset.dept; return paintAdd(); }
+    var r = e.target.closest("[data-role]");
+    if (r) { addRole = r.dataset.role; return paintAdd(); }
+    if (e.target.closest("#add-suggest")) document.getElementById("add-pw").value = suggest();
+  });
+  document.getElementById("add-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!addDept) { U.toast("Pick a department."); return; }
+    var btn = e.target.querySelector("[type=submit]");
+    btn.disabled = true;
+    API.adminAddPerson(document.getElementById("add-name").value.trim(),
+                       document.getElementById("add-email").value.trim(),
+                       addDept, addRole, document.getElementById("add-pw").value).then(function (r) {
+      btn.disabled = false;
+      addSheet.close();
+      U.toast(U.esc("Added " + r.name + ". Give them their email and temporary password — they can change it once signed in."));
+      return refresh();
+    }, function (err) { btn.disabled = false; U.toast(U.esc(err.message)); });
+  });
+})();
+</script>
+</body>
+</html>

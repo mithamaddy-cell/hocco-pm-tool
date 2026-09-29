@@ -266,6 +266,7 @@ window.UI = (function () {
         '<h2 class="sheet__h" id="account-name" style="font-size:17px;font-weight:700;letter-spacing:-0.02em;margin:0 0 2px"></h2>' +
         '<p class="sheet__ctx" id="account-ctx" style="font-size:12.5px;color:var(--ink-3);margin:0 0 var(--s4)"></p>' +
         '<div id="account-main">' +
+          '<a class="btn btn--ghost btn--block" href="hocco-admin.html" id="account-admin" style="margin-bottom:var(--s2);display:none">Admin · people &amp; access</a>' +
           '<button class="btn btn--ghost btn--block" data-show-pw>Change password</button>' +
           '<button class="btn btn--primary btn--block" style="margin-top:var(--s2)" data-signout>Sign out</button>' +
           '<button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-account>Close</button>' +
@@ -320,6 +321,7 @@ window.UI = (function () {
     _account.onSignedOut = onSignedOut || function () { location.href = "index.html"; };
     _account.el.querySelector("#account-name").textContent = (user.profile && user.profile.full_name) || user.email;
     _account.el.querySelector("#account-ctx").textContent = (deptName ? deptName + " · " : "") + user.email;
+    _account.el.querySelector("#account-admin").style.display = (user.profile && user.profile.is_admin) ? "" : "none";
     _account.showPw(false);
     _account.ctl.open();
   }

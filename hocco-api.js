@@ -133,6 +133,15 @@ window.HoccoAPI = (function () {
   function setPriority(initiativeUuid, priority) {
     return rpc("set_priority", { p_initiative_id: initiativeUuid, p_priority: priority });
   }
+  /* ---- Admin (each function checks "is this an active admin?" itself) ---- */
+  function adminListPeople() { return rpc("admin_list_people", {}); }
+  function adminAddPerson(name, email, deptId, role, password) {
+    return rpc("admin_add_person", { p_full_name: name, p_email: email, p_department: deptId,
+                                     p_role: role, p_password: password });
+  }
+  function adminSetActive(personId, active) { return rpc("admin_set_active", { p_person: personId, p_active: active }); }
+  function adminSetCovering(personId, deptId) { return rpc("admin_set_covering", { p_person: personId, p_department: deptId || null }); }
+
   function assignStage(stageId, personId) {
     return rpc("assign_stage", { p_stage_id: stageId, p_assignee: personId || null });
   }
@@ -254,7 +263,7 @@ window.HoccoAPI = (function () {
       q("blocker_reasons", "id, label, sort_order"),
       q("gate_rejection_reasons", "id, label, sort_order"),
       /* People: only returned to signed-in users (logged-out visitors get none). */
-      q("profiles", "id, full_name, department_id, role")
+      q("profiles", "id, full_name, department_id, role, active, covering_department_id")
     ]).then(function (r) {
       return build({ initiatives: r[0], departments: r[1], tracks: r[2], stages: r[3],
                      gates: r[4], reviews: r[5], blockers: r[6], deps: r[7], reasons: r[8],
@@ -537,7 +546,8 @@ window.HoccoAPI = (function () {
             (stagesByTrack[d.blocking_track_id] || []).some(function (z) { return z.status !== "done"; });
         });
         stages.forEach(function (s, si) {
-          if (s.department_id !== deptId && s.second_department_id !== deptId) return;
+          var mine = opts.userId && s.assignee_id === opts.userId;
+          if (s.department_id !== deptId && s.second_department_id !== deptId && !mine) return;
           /* Reps only see what's assigned to them; count the rest. */
           if (opts.userId && !opts.isHead && s.assignee_id !== opts.userId) {
             if (!s.assignee_id && s.status !== "done") unassigned++;
@@ -609,9 +619,18 @@ window.HoccoAPI = (function () {
       }).sort(function (a, b) { return b.days - a.days; });
 
       function byLaunch(a, b) { return a._launch < b._launch ? -1 : a._launch > b._launch ? 1 : 0; }
-      var team = (db.people || []).filter(function (p) { return p.department_id === deptId; })
-        .sort(function (a, b) { return (a.role === "head" ? 0 : 1) - (b.role === "head" ? 0 : 1) || a.full_name.localeCompare(b.full_name); })
-        .map(function (p) { return { id: p.id, name: shortName(p), head: p.role === "head" }; });
+      var team = (db.people || []).filter(function (p) {
+          return p.active !== false && (p.department_id === deptId || p.covering_department_id === deptId);
+        })
+        .sort(function (a, b) {
+          var ra = a.department_id !== deptId ? 2 : (a.role === "head" ? 0 : 1);
+          var rb = b.department_id !== deptId ? 2 : (b.role === "head" ? 0 : 1);
+          return ra - rb || a.full_name.localeCompare(b.full_name);
+        })
+        .map(function (p) {
+          return { id: p.id, head: p.role === "head",
+                   name: p.department_id === deptId ? shortName(p) : p.full_name + " (covering)" };
+        });
       return { team: team, unassigned: unassigned,
                now: now.sort(byLaunch), waiting: waiting, upcoming: upcoming.sort(byLaunch),
                completed: completed.sort(function (a, b) { return a._closed < b._closed ? 1 : -1; }) };
@@ -737,5 +756,6 @@ window.HoccoAPI = (function () {
            setStageStatus: setStageStatus,
            raiseBlocker: raiseBlocker, notifications: notifications, markNotificationsRead: markNotificationsRead,
            respondToBlocker: respondToBlocker, decideGate: decideGate, setPriority: setPriority,
-           assignStage: assignStage };
+           assignStage: assignStage, adminListPeople: adminListPeople, adminAddPerson: adminAddPerson,
+           adminSetActive: adminSetActive, adminSetCovering: adminSetCovering };
 })();
