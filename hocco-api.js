@@ -20,7 +20,6 @@
 
 window.HoccoAPI = (function () {
 
-  var STALE_DAYS = 7;
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   var _sb = null;                               /* one connection per page */
@@ -181,8 +180,9 @@ window.HoccoAPI = (function () {
   }
 
   /* ---- Dates -------------------------------------------------------------- */
+  var _dbToday = null;           /* the shared "today" from app_settings, once loaded */
   function todayDate() {
-    var t = (window.HOCCO_CONFIG || {}).today;
+    var t = _dbToday || (window.HOCCO_CONFIG || {}).today;
     return t ? parseDate(t) : new Date(new Date().toDateString());
   }
   function parseDate(s) {                       /* "2026-08-18" → local midnight */
@@ -230,13 +230,14 @@ window.HoccoAPI = (function () {
       return { state: "Rework", reason: gateReason(g) };
     },
 
-    /* 4. A stale stage — in progress but no update for STALE_DAYS or more. */
+    /* 4. A stale stage — marked Stale by the hourly job (no update for
+          double its limit). */
     function (i, ctx) {
       var worst = null;
       ctx.stages.forEach(function (s) {
-        if ((s.status === "working" || s.status === "blocked") && s.last_update_on) {
+        if (s.stale_since && s.status !== "done" && s.last_update_on) {
           var d = daysBetween(parseDate(s.last_update_on), ctx.today);
-          if (d >= STALE_DAYS && (!worst || d > worst.d)) worst = { s: s, d: d };
+          if (!worst || d > worst.d) worst = { s: s, d: d };
         }
       });
       if (!worst) return null;
@@ -286,7 +287,7 @@ window.HoccoAPI = (function () {
       q("initiatives",  "id, slug, name, type, brand_code, owner_department_id, priority, launch_on, late_days, started_on, created_at, days_working, days_waiting, days_blocked"),
       q("departments",  "id, name, sort_order"),
       q("tracks",       "id, initiative_id, slug, name, department_id, position, status, summary"),
-      q("stages",       "id, track_id, name, position, department_id, second_department_id, status, note, closed_on, closed_at, unblocked_at, last_update_on, assignee_id"),
+      q("stages",       "id, track_id, name, position, department_id, second_department_id, status, note, closed_on, closed_at, unblocked_at, last_update_on, assignee_id, stale_after_days, stale_since"),
       q("gates",        "id, track_id, name, after_stage_position, department_id, status, is_milestone"),
       q("gate_reviews", "gate_id, revision, outcome, reviewer_department_id, reason, note, flags, reviewed_on"),
       q("blockers",     "id, initiative_id, title, raised_by_department_id, against_department_id, status, raised_on, acknowledged_on, note, dispute_note"),
@@ -294,8 +295,11 @@ window.HoccoAPI = (function () {
       q("blocker_reasons", "id, label, sort_order"),
       q("gate_rejection_reasons", "id, label, sort_order"),
       /* People: only returned to signed-in users (logged-out visitors get none). */
-      q("profiles", "id, full_name, department_id, role, active, covering_department_id")
+      q("profiles", "id, full_name, department_id, role, active, covering_department_id"),
+      q("app_settings", "demo_today")
     ]).then(function (r) {
+      /* The job and the screens share one "today" (app_settings). */
+      if (r[11] && r[11][0]) _dbToday = r[11][0].demo_today || null;
       return build({ initiatives: r[0], departments: r[1], tracks: r[2], stages: r[3],
                      gates: r[4], reviews: r[5], blockers: r[6], deps: r[7], reasons: r[8],
                      gateReasons: r[9], people: r[10] });
