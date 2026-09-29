@@ -79,7 +79,10 @@ window.HoccoAPI = (function () {
   function requireSignIn() {
     return me().then(function (u) {
       if (u && u.profile) return u;
-      var here = location.pathname.split("/").pop() + location.search;
+      /* The live host shortens "page.html" to "page": always send the full name. */
+      var page = location.pathname.split("/").pop() || "index.html";
+      if (page.indexOf(".") < 0) page += ".html";
+      var here = page + location.search;
       location.replace("index.html?next=" + encodeURIComponent(here) + (u ? "&nolink=1" : ""));
       return new Promise(function () {});       /* stop here while leaving */
     });

@@ -392,8 +392,9 @@ window.UI = (function () {
         var go = function () {
           var to = notifLink(n);
           _bell.ctl.close();
-          var here = location.pathname.split("/").pop();
-          if (to.split("#")[0] === here && to.indexOf("#") > -1) {
+          /* The live host shortens "page.html" to "page": compare without it. */
+          var here = (location.pathname.split("/").pop() || "index").replace(/\.html$/, "");
+          if (to.split("#")[0].replace(/\.html$/, "") === here && to.indexOf("#") > -1) {
             location.hash = to.split("#")[1];            /* same screen: just jump */
             window.dispatchEvent(new HashChangeEvent("hashchange"));
           } else {
