@@ -60,11 +60,34 @@
 
 <div id="nav"></div>
 
-<script src="hocco-data.js?v=12"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="hocco-config.js?v=14"></script>
+<script src="hocco-api.js?v=16"></script>
 <script src="hocco-ui.js?v=12"></script>
 <script>
 (function () {
-  var D = window.HOCCO, U = window.UI;
+  var U = window.UI;
+  document.getElementById("nav").innerHTML = U.bottomNav("blockers", 0);
+
+  /* ---- Loading / error ---- */
+  function message(html) {
+    document.getElementById("open").innerHTML = "";
+    document.getElementById("disputed").innerHTML = '<div class="emptyfilter" role="status">' + html + "</div>";
+  }
+  function start() {
+    document.getElementById("sub").textContent = "Loading…";
+    message("Loading blockers…");
+    window.HoccoAPI.load().then(render, function (err) {
+      if (window.console) console.error(err);
+      document.getElementById("sub").textContent = "Offline";
+      message("Couldn’t reach the database just now. Check your connection and try again." +
+              '<div style="margin-top:var(--s3)"><button class="btn btn--ghost" data-retry>Try again</button></div>');
+    });
+  }
+  document.addEventListener("click", function (e) { if (e.target.closest("[data-retry]")) start(); });
+  start();
+
+  function render(D) {
   var disputed = D.blockers.filter(function (b) { return b.state === "disputed"; });
   var open     = D.blockers.filter(function (b) { return b.state === "open"; });
 
@@ -109,13 +132,15 @@
     var o = open.filter(function (b) { return matchFn(initOf(b)); });
     document.getElementById("cd").textContent = d.length;
     document.getElementById("co").textContent = o.length;
+    /* "Match the filter" only when a filter is what's hiding things. */
     document.getElementById("disputed").innerHTML = d.length ? d.map(card).join("")
-      : '<div class="emptyfilter">No disputed blockers match the filter.</div>';
+      : '<div class="emptyfilter">' + (disputed.length ? "No disputed blockers match the filter." : "No disputes right now.") + "</div>";
     document.getElementById("open").innerHTML = o.length ? o.map(card).join("")
-      : '<div class="emptyfilter">No open blockers match the filter.</div>';
+      : '<div class="emptyfilter">' + (open.length ? "No open blockers match the filter." : "No open blockers right now.") + "</div>";
   }
   renderLists(function () { return true; });
   U.filters(document.getElementById("filter-b"), renderLists);
+  }
 
   document.body.addEventListener("click", function (e) {
     if (e.target.closest("[data-ack]")) {
