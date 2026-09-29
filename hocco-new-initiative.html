@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>New Initiative — Hocco PM</title>
+<script src="hocco-theme.js?v=12"></script>
+<link rel="stylesheet" href="hocco-tokens.css?v=12">
+<style>
+  .tpl { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+         padding: var(--s4); margin-bottom: var(--s2); border-radius: var(--r-md); }
+  .tpl__n { font-size: 15.5px; font-weight: 680; letter-spacing: -0.015em; }
+  .tpl__d { font-size: 13px; color: var(--ink-2); margin-top: 3px; }
+  .tpl__m { font-size: 11.5px; color: var(--ink-3); margin-top: var(--s2); font-weight: 600; }
+  .tpl[aria-pressed="true"] { outline: 2px solid var(--raspberry-deep); outline-offset: -2px; }
+  .field, .select {
+    width: 100%; font: inherit; font-size: 15px; color: var(--ink); min-height: var(--touch);
+    background: var(--glass-faint); border: 1px solid var(--edge-strong);
+    border-radius: var(--r-md); padding: var(--s3); margin-bottom: var(--s3);
+  }
+  label.lbl { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.05em;
+              text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px 2px; }
+</style>
+</head>
+<body>
+<div class="ground" aria-hidden="true"></div>
+
+<header class="appbar">
+  <a class="iconbtn" href="hocco-mywork-mobile.html" aria-label="Back">‹</a>
+  <div style="flex:1;min-width:0">
+    <h1 class="appbar__title">New Initiative</h1>
+    <div class="appbar__sub">Anyone can create one</div>
+  </div>
+</header>
+
+<main class="frame screen">
+
+  <p class="meta" style="margin:0 0 var(--s5);padding:0 var(--s1)">
+    Pick a type and the whole dependency graph is built for you — tracks, stages, gates,
+    handoffs, staleness thresholds. You are not asked to model your own process.
+  </p>
+
+  <div class="section">
+    <div class="section__head"><p class="eyebrow">Type</p><span class="count">5 of 13 live</span></div>
+    <div id="tpls"></div>
+  </div>
+
+  <div class="section" id="details" hidden>
+    <div class="section__head"><p class="eyebrow">Details</p></div>
+    <div class="glass" style="padding:var(--s4)">
+      <label class="lbl" for="nm">Name</label>
+      <input class="field" id="nm" placeholder="e.g. Tender Coconut 500ml">
+
+      <label class="lbl" for="br">Brand</label>
+      <select class="select" id="br">
+        <option>Brand A</option><option>Brand B</option><option>Both brands</option>
+      </select>
+
+      <label class="lbl" for="dt">Target launch date</label>
+      <input class="field" id="dt" type="date">
+
+      <p class="meta" style="margin:var(--s2) 0 0">
+        Priority is not yours to set. This will sit in <b>Awaiting Prioritisation</b> until the
+        CEO places it — which is what makes open creation safe.
+      </p>
+    </div>
+    <button class="btn btn--primary btn--block" style="margin-top:var(--s4)" id="create">Create initiative</button>
+  </div>
+
+  <hr class="divider">
+  <p class="meta" style="text-align:center">
+    Need a type that isn’t here? The Template Builder assembles new ones from shared
+    stage-groups — no engineering ticket, no bottleneck.
+  </p>
+
+</main>
+
+<div id="nav"></div>
+
+<script src="hocco-data.js?v=12"></script>
+<script src="hocco-ui.js?v=12"></script>
+<script>
+(function () {
+  var U = window.UI;
+  document.getElementById("nav").innerHTML = U.bottomNav("new", 1);
+
+  /* The five v1 templates — four structural shapes (spec §6). */
+  var templates = [
+    { n: "NPD",                  d: "New product, end to end.", m: "4 tracks · 17 stages · 5 gates" },
+    { n: "Seasonal flavour (FOM)", d: "Recurring, with an immovable external date.", m: "3 tracks · 11 stages · 3 gates" },
+    { n: "Packaging redesign",   d: "NPD’s packaging track, standalone.", m: "1 track · 6 stages · 2 gates" },
+    { n: "Price revision",       d: "Short approval chain. Small things belong here too.", m: "1 track · 4 stages · 2 gates" },
+    { n: "Volume update",        d: "Pack-size change through the same approval chain.", m: "1 track · 4 stages · 2 gates" }
+  ];
+
+  document.getElementById("tpls").innerHTML = templates.map(function (t, i) {
+    return '<button class="glass tpl" aria-pressed="false" data-i="' + i + '">' +
+      '<div class="tpl__n">' + U.esc(t.n) + "</div>" +
+      '<div class="tpl__d">' + U.esc(t.d) + "</div>" +
+      '<div class="tpl__m">' + U.esc(t.m) + "</div>" +
+    "</button>";
+  }).join("");
+
+  document.getElementById("tpls").addEventListener("click", function (e) {
+    var b = e.target.closest(".tpl");
+    if (!b) return;
+    document.querySelectorAll(".tpl").forEach(function (x) {
+      x.setAttribute("aria-pressed", String(x === b));
+    });
+    document.getElementById("details").hidden = false;
+    document.getElementById("details").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  document.getElementById("create").addEventListener("click", function () {
+    U.toast("Created. It’s in Awaiting Prioritisation — the CEO has been notified.");
+  });
+})();
+</script>
+</body>
+</html>

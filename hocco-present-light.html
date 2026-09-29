@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hocco PM — Light theme</title>
+<!-- Force light for this cover before first paint, and remember the choice so the
+     prototype screens (each carrying ?theme=light, and hocco-theme.js) stay locked
+     as you click through. The cover itself doesn't load the threader, so the
+     "other theme" link below is left alone. -->
+<script>
+(function () {
+  var r = document.documentElement;
+  r.setAttribute("data-theme", "light");
+  r.setAttribute("data-theme-forced", "1");
+  r.style.colorScheme = "light";
+  try { localStorage.setItem("hocco-theme", "light"); } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="hocco-tokens.css?v=12">
+<style>
+  .cover {
+    max-width: 720px; margin: 0 auto; min-height: 100vh;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: var(--s8) var(--s5) var(--s10); gap: var(--s5);
+  }
+  .cover h1 { font-size: 40px; font-weight: 740; letter-spacing: -0.04em; margin: 0; line-height: 1.06; color: var(--ink); }
+  .cover .lede { font-size: 16px; color: var(--ink-2); margin: 0; max-width: 52ch; line-height: 1.55; }
+  .themeflag {
+    display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
+    padding: 6px 12px; border-radius: var(--r-pill);
+    background: var(--indigo-wash); color: var(--indigo);
+  }
+  .themeflag .dot { width: 10px; height: 10px; border-radius: 50%; background: #FFFFFF; border: 1px solid var(--edge-strong); }
+  .cover .enter { align-self: flex-start; font-size: 16px; padding: var(--s3) var(--s6); min-height: 56px; }
+  .jump { margin-top: var(--s4); }
+  .jump__label { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 var(--s3) 2px; }
+  .jump__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s2); }
+  .jump__grid a {
+    padding: var(--s3) var(--s4); border-radius: var(--r-md);
+    background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lift-1);
+    -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+    color: var(--ink); text-decoration: none; font-size: 13.5px; font-weight: 620;
+  }
+  .jump__grid a:hover { background: var(--glass-strong); }
+  .swap { align-self: flex-start; font-size: 13px; font-weight: 700; color: var(--raspberry); text-decoration: none; }
+  .swap:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="ground" aria-hidden="true"></div>
+
+<div class="cover">
+  <p class="eyebrow">Hocco PM Tool · Stakeholder preview</p>
+  <h1>Quiet when healthy.<br>Loud when troubled.</h1>
+  <p class="lede">
+    An opinionated initiative tracker for Hocco — mobile-first, glassmorphic, and
+    built to turn “whose row is red?” into a diagnosis. This session is locked to the
+    light theme, so it stays consistent on any screen.
+  </p>
+
+  <span class="themeflag"><span class="dot" aria-hidden="true"></span> Light theme locked</span>
+
+  <a class="btn btn--primary enter" href="hocco-portfolio-mobile.html?theme=light">Enter prototype →</a>
+
+  <div class="jump">
+    <p class="jump__label">Jump to a screen</p>
+    <div class="jump__grid">
+      <a href="hocco-portfolio-mobile.html?theme=light">Portfolio</a>
+      <a href="hocco-mywork-mobile.html?theme=light">My Work</a>
+      <a href="hocco-blockers-mobile.html?theme=light">Blockers</a>
+      <a href="hocco-new-initiative.html?theme=light">New Initiative</a>
+      <a href="hocco-initiative-detail.html?id=mango-kulfi&theme=light">Initiative Detail</a>
+      <a href="hocco-design-system.html?theme=light">Design System</a>
+    </div>
+  </div>
+
+  <a class="swap" href="hocco-present-dark.html">View the dark-theme version →</a>
+</div>
+</body>
+</html>

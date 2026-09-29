@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Portfolio — Hocco PM</title>
+<script src="hocco-theme.js?v=12"></script>
+<link rel="stylesheet" href="hocco-tokens.css?v=12">
+<style>
+  /* Departments tab — capacity vs process, never individual behaviour */
+  .dept { padding: var(--s3) var(--s4); margin-bottom: var(--s2); }
+  .dept__head { display: flex; align-items: baseline; gap: var(--s2); margin-bottom: var(--s2); }
+  .dept__name { font-size: 14.5px; font-weight: 680; flex: 1; }
+  .dept__total { font-size: 12px; color: var(--ink-3); font-weight: 600; }
+  .dept__bar { display: flex; height: 10px; border-radius: var(--r-pill); overflow: hidden; background: var(--edge); }
+  .dept__bar i { display: block; }
+  .dept__key { display: flex; gap: var(--s3); margin-top: var(--s2); font-size: 11.5px; color: var(--ink-2); flex-wrap: wrap; }
+  .dept__key b { font-weight: 700; }
+
+  /* Calendar tab — scanning surface, no drag-to-reschedule in v1 */
+  .cal__month { margin-bottom: var(--s5); }
+  .cal__label { font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase;
+                color: var(--ink-3); margin-bottom: var(--s3); padding-left: var(--s1); }
+  .cal__row { display: flex; gap: var(--s3); align-items: flex-start; padding: var(--s3) var(--s4);
+              margin-bottom: var(--s2); }
+  .cal__date { flex: none; width: 42px; text-align: center; }
+  .cal__d { font-size: 17px; font-weight: 720; letter-spacing: -0.03em; line-height: 1; }
+  .cal__m { font-size: 10px; font-weight: 650; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .cal__body { flex: 1; min-width: 0; }
+  .collide { font-size: 12px; font-weight: 650; color: var(--risk); margin-top: 2px; }
+
+  /* Legend (left) and Filter (right) share one row. Filter pushes to the right
+     edge; if active-filter pills make it too wide, the bar wraps to its own
+     line rather than crushing the legend — so the legend must never shrink. */
+  .cal__toolbar {
+    display: flex; align-items: center; gap: var(--s3);
+    flex-wrap: wrap; margin: 0 0 var(--s4);
+  }
+  .cal__toolbar .legend { flex: 0 0 auto; }         /* keep its width, never collapse */
+  .cal__filter { flex: 0 1 auto; margin-left: auto; max-width: 100%; }
+
+  .panel { display: none; }
+  .panel[data-active="true"] { display: block; }
+</style>
+</head>
+<body>
+<div class="ground" aria-hidden="true"></div>
+
+<header class="appbar">
+  <div style="flex:1;min-width:0">
+    <h1 class="appbar__title">Portfolio</h1>
+    <div class="appbar__sub" id="sub"></div>
+  </div>
+  <a class="iconbtn" href="#" aria-label="Search">⌕</a>
+  <a class="iconbtn" href="#" aria-label="Notifications">◔<span class="iconbtn__dot"></span></a>
+</header>
+
+<main class="frame screen">
+
+  <div class="tabs" role="tablist" aria-label="Portfolio views">
+    <button class="tab" role="tab" aria-selected="true"  data-panel="calendar">Calendar</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="initiatives">Initiatives</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="departments">Departments</button>
+  </div>
+
+  <!-- ============ INITIATIVES ============ -->
+  <section class="panel" id="p-initiatives" role="tabpanel">
+    <div class="filterbar" id="filter-i"></div>
+    <div class="strip" id="strip"></div>
+    <div id="bands"></div>
+    <p class="meta" style="text-align:center;padding:var(--s4) 0 0">
+      Leadership view is read-only. Monitoring, not reassigning.
+    </p>
+  </section>
+
+  <!-- ============ DEPARTMENTS ============ -->
+  <section class="panel" id="p-departments" role="tabpanel">
+    <div class="section__head">
+      <p class="eyebrow">Load across both brands</p>
+    </div>
+    <p class="meta" style="margin:0 0 var(--s3);padding:0 2px">
+      Answers “why is everything slow” — capacity contention versus process failure.
+      Drill-down shows the department’s work, never an individual’s behaviour.
+    </p>
+    <div class="legend" style="margin:0 0 var(--s4);padding:0 2px">
+      <span class="legend__item"><i class="legend__sw" style="background:var(--indigo)"></i>Working</span>
+      <span class="legend__item"><i class="legend__sw" style="background:var(--wait)"></i>Queued</span>
+      <span class="legend__item"><i class="legend__sw" style="background:var(--risk)"></i>Blocked</span>
+    </div>
+    <div id="depts"></div>
+  </section>
+
+  <!-- ============ CALENDAR ============ -->
+  <section class="panel" data-active="true" id="p-calendar" role="tabpanel">
+    <div class="section__head"><p class="eyebrow">Launches &amp; deadlines</p></div>
+    <p class="meta" style="margin:0 0 var(--s3);padding:0 2px">
+      Surfaces timing collisions. Read-only in v1 — no drag-to-reschedule.
+    </p>
+    <div class="cal__toolbar">
+      <div class="legend" style="margin:0;padding:0 2px">
+        <span class="legend__item"><i class="legend__sw" style="background:var(--launch-ontrack)"></i>On track</span>
+        <span class="legend__item"><i class="legend__sw" style="background:var(--launch-delayed)"></i>Delayed</span>
+        <span class="legend__item"><i class="legend__sw" style="background:var(--launch-blocked)"></i>Blocked</span>
+      </div>
+      <div class="filterbar cal__filter" id="filter-c"></div>
+    </div>
+    <div id="cal"></div>
+  </section>
+
+</main>
+
+<div id="nav"></div>
+
+<script src="hocco-data.js?v=12"></script>
+<script src="hocco-ui.js?v=12"></script>
+<script>
+(function () {
+  var D = window.HOCCO, U = window.UI;
+  var c = D.counts();
+
+  document.getElementById("sub").textContent = D.initiatives.length + " live · " + D.today;
+  document.getElementById("nav").innerHTML = U.bottomNav("portfolio", 1);
+
+  /* ---- Summary strip. §10 flags this as a real fork: leadership may want a
+     tighter top-of-screen line rather than leading with cards. Both are here —
+     the strip sits above the At Risk band so testing can settle it. ---- */
+  document.getElementById("strip").innerHTML =
+    '<div class="strip__cell strip__cell--risk"><div class="strip__n num">' + c.risk + '</div><div class="strip__l">AT RISK</div></div>' +
+    '<div class="strip__cell"><div class="strip__n num">' + c.pending + '</div><div class="strip__l">AWAITING</div></div>' +
+    '<div class="strip__cell"><div class="strip__n num">' + c.ontrack + '</div><div class="strip__l">ON TRACK</div></div>';
+
+  /* ---- The Row, portfolio variant. Every at-risk row states its reason in
+     words. Never a bare red dot. Reason text never truncates. ---- */
+  function row(i) {
+    var tier = i.band === "risk" ? "surface" : (i.band === "pending" ? "present" : "recede");
+    /* Every row opens its own Initiative Detail — that screen is the whole
+       point of Portfolio, and a dead row teaches people the tool is a poster. */
+    var href = "hocco-initiative-detail.html?id=" + encodeURIComponent(i.id);
+    var icon = i.band === "risk" ? '<span class="ico" aria-hidden="true">▲</span>' : "";
+
+    return '<a class="row row--' + tier + '" href="' + href + '">' +
+      '<div class="row__head">' +
+        '<span class="row__title">' + U.esc(i.name) + "</span>" +
+        '<span class="row__label">' + U.esc(i.type) + "</span>" +
+      "</div>" +
+      '<div class="row__reason">' + icon + "<span>" + U.esc(i.reason) + "</span></div>" +
+      '<div class="row__foot">' +
+        U.stateChip(i.state) +
+        U.brandChip(i.brand) +
+        '<span class="meta num" style="margin-left:auto">' +
+          (i.launch === "—" ? "No date" : "Launch " + U.esc(i.launch)) +
+        "</span>" +
+      "</div>" +
+    "</a>";
+  }
+
+  /* Ranked by launch-proximity × lateness (spec §7). The data is already
+     ordered that way; this just keeps bands separate. matchFn is the live
+     filter predicate. */
+  function band(key, title, note, matchFn) {
+    var rows = D.initiatives.filter(function (i) { return i.band === key && matchFn(i); });
+    /* The At Risk header takes the amber accent — the band itself is the
+       warning, so its title must not read as calm structure. */
+    var mod = key === "risk" ? " eyebrow--risk" : "";
+    return '<section class="section">' +
+      '<div class="section__head"><p class="eyebrow' + mod + '">' + title + '</p>' +
+      '<span class="count num">' + rows.length + "</span></div>" +
+      (note ? '<p class="meta" style="margin:-4px 0 var(--s3);padding:0 2px">' + note + "</p>" : "") +
+      (rows.length ? rows.map(row).join("")
+        : '<div class="emptyfilter">No ' + title.toLowerCase() + " initiatives match the filter.</div>") +
+    "</section>";
+  }
+
+  function renderBands(matchFn) {
+    document.getElementById("bands").innerHTML =
+      band("risk",    "At risk",                 "Each row says why, in words.", matchFn) +
+      band("pending", "Awaiting prioritisation", "Anyone can create. It waits here until the CEO places it.", matchFn) +
+      band("ontrack", "On track",                "Quiet on purpose.", matchFn);
+  }
+  renderBands(function () { return true; });
+
+  /* Filter on the Initiatives tab re-renders the three bands live. */
+  U.filters(document.getElementById("filter-i"), renderBands);
+
+  /* ---- Departments ---- */
+  document.getElementById("depts").innerHTML = D.departments.map(function (d) {
+    var total = d.working + d.queued + d.blocked;
+    function pct(n) { return (n / total * 100).toFixed(1) + "%"; }
+    return '<div class="glass dept">' +
+      '<div class="dept__head"><span class="dept__name">' + U.esc(d.name) + "</span>" +
+      '<span class="dept__total num">' + total + " items</span></div>" +
+      '<div class="dept__bar">' +
+        '<i style="width:' + pct(d.working) + ';background:var(--indigo)"></i>' +
+        '<i style="width:' + pct(d.queued)  + ';background:var(--wait)"></i>' +
+        '<i style="width:' + pct(d.blocked) + ';background:var(--risk)"></i>' +
+      "</div>" +
+      '<div class="dept__key">' +
+        "<span><b class=num>" + d.working + "</b> working</span>" +
+        "<span><b class=num>" + d.queued  + "</b> queued</span>" +
+        (d.blocked ? '<span style="color:var(--risk)"><b class=num>' + d.blocked + "</b> blocked</span>" : "") +
+      "</div>" +
+    "</div>";
+  }).join("");
+
+  /* ---- Calendar: group by launch month, flag same-day collisions.
+     Each launch carries a status rail + label (on-track / delayed / blocked) —
+     three distinct signals, never colour alone (spec §8). Filterable live. ---- */
+  var order = ["Aug", "Sep", "Oct", "Nov"];
+  var full = { Aug: "August 2026", Sep: "September 2026", Oct: "October 2026", Nov: "November 2026" };
+  var STATUS_LABEL = { ontrack: "On track", delayed: "Delayed", blocked: "Blocked" };
+
+  function renderCalendar(matchFn) {
+    var dated = D.initiatives.filter(function (i) { return i.launch !== "—" && matchFn(i); });
+    var months = {};
+    dated.forEach(function (i) { var m = i.launch.split(" ")[1]; (months[m] = months[m] || []).push(i); });
+
+    var html = order.map(function (m) {
+      var list = months[m] || [];
+      if (!list.length) return "";
+      /* Collisions are counted against the FULL day, not the filtered subset,
+         so a hidden launch still warns of the clash. */
+      var byDay = {};
+      D.initiatives.forEach(function (i) {
+        if (i.launch.split(" ")[1] === m && i.launch !== "—") {
+          var d = i.launch.split(" ")[0]; (byDay[d] = byDay[d] || []).push(i);
+        }
+      });
+
+      return '<div class="cal__month"><div class="cal__label">' + full[m] + "</div>" +
+        list.map(function (i) {
+          var day = i.launch.split(" ")[0];
+          var collide = byDay[day].length > 1;
+          var st = D.launchStatus(i);
+          var tier = i.band === "risk" ? "glass-strong" : "glass-faint";
+          var icon = st === "ontrack" ? "✓" : "▲";
+          return '<div class="' + tier + ' cal__row">' +
+            '<span class="cal__rail cal__rail--' + st + '" aria-hidden="true"></span>' +
+            '<div class="cal__date"><div class="cal__d num">' + day + '</div><div class="cal__m">' + m + "</div></div>" +
+            '<div class="cal__body">' +
+              '<div class="row__title" style="font-size:14px">' + U.esc(i.name) + "</div>" +
+              '<div class="meta">' + U.esc(i.type) + " · " + (i.brand === "Shared" ? "Both brands" : "Brand " + U.esc(i.brand)) + "</div>" +
+              '<span class="cal__status cal__status--' + st + '">' + icon + " " + STATUS_LABEL[st] + "</span>" +
+              (collide ? '<div class="collide">▲ Collides with ' + (byDay[day].length - 1) + " other launch" + (byDay[day].length > 2 ? "es" : "") + "</div>" : "") +
+            "</div>" +
+          "</div>";
+        }).join("") + "</div>";
+    }).join("");
+
+    document.getElementById("cal").innerHTML = html ||
+      '<div class="emptyfilter">No launches match the filter.</div>';
+  }
+  renderCalendar(function () { return true; });
+  U.filters(document.getElementById("filter-c"), renderCalendar);
+
+  /* ---- Tabs ---- */
+  var tabs = [].slice.call(document.querySelectorAll(".tab"));
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () {
+      tabs.forEach(function (x) { x.setAttribute("aria-selected", String(x === t)); });
+      document.querySelectorAll(".panel").forEach(function (p) {
+        p.setAttribute("data-active", String(p.id === "p-" + t.dataset.panel));
+      });
+      window.scrollTo({ top: 0 });
+    });
+  });
+})();
+</script>
+</body>
+</html>

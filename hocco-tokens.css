@@ -1,0 +1,1163 @@
+/* ==========================================================================
+   HOCCO PM TOOL — Design tokens & core components
+   Visual direction: Glassmorphism (replaces spec §8)
+   v0.4
+
+   What carries meaning:
+     GLASS  → structure, depth, layering, surface hierarchy
+     SOLID  → state, risk, action. Never rendered in glass.
+
+   Rule that makes glassmorphism safe here: risk signals are opaque.
+   A translucent surface desaturates and lowers contrast unpredictably,
+   so no at-risk signal is ever expressed by a translucent element alone.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. PALETTE
+   Role assignments inherited from spec §8 (the "raspberry = click me"
+   reasoning is about learned association, not visual style, so it survives
+   the restyle). Values are deepened: glass washes out chroma, and these
+   need to hold contrast after the wash.
+   -------------------------------------------------------------------------- */
+:root {
+  /* Brand source (Hocco logo) */
+  --raspberry:        #D43450;
+  --raspberry-deep:   #B32540;
+  --raspberry-lift:   #F0576F;
+  --indigo:           #383084;
+  --indigo-deep:      #262059;
+  --indigo-lift:      #6259B8;
+  --offwhite:         #FCFCFC;
+
+  /* System roles */
+  --risk:             #A34E06;  /* burnt amber — solid fills, AA on white */
+  --risk-bright:      #C77A10;  /* amber — rails, icons, dark-mode text */
+  --wait:             #4A5578;  /* slate — queued/waiting. not failure */
+  --healthy:          #3F8460;  /* muted green — done, settled */
+  --news:             #16855B;  /* bright green — approved / launched */
+  --brand-a:          #1F6B6A;  /* teal  — always paired with a text label */
+  --brand-b:          #8A5A10;  /* ochre — always paired with a text label */
+
+  /* Brand washes — low-alpha tints for structural surfaces (headers, counts,
+     initiative labels). Lets indigo read as the structural voice everywhere
+     without ever competing with the amber risk signal. */
+  --indigo-wash:      rgba(56, 48, 132, 0.10);
+  --indigo-wash-2:    rgba(56, 48, 132, 0.16);
+  --raspberry-wash:   rgba(212, 52, 80, 0.10);
+
+  /* Calendar launch-health — one source of truth for rails, chips and legend
+     so they can never drift apart. Three separable hues per theme. */
+  --launch-ontrack:   #3F8460;
+  --launch-delayed:   #C77A10;
+  --launch-blocked:   #A34E06;
+
+  /* Ink */
+  --ink:              #1B1A2E;
+  --ink-2:            #45425F;
+  --ink-3:            #6B6885;
+  --ink-on-solid:     #FFFFFF;
+
+  /* Ambient ground — glass needs something to refract */
+  --ground:           #E4DEEC;
+  --ground-blob-1:    rgba(212, 52, 80, 0.46);   /* raspberry, top right */
+  --ground-blob-2:    rgba(56, 48, 132, 0.44);   /* indigo, bottom left  */
+  --ground-blob-3:    rgba(255, 255, 255, 0.72); /* the off-white lift    */
+
+  /* Glass surfaces */
+  --glass-faint:      rgba(255, 255, 255, 0.34);
+  --glass:            rgba(255, 255, 255, 0.62);
+  --glass-strong:     rgba(255, 255, 255, 0.82);
+  --glass-chrome:     rgba(252, 252, 254, 0.72);  /* appbar / bottom nav */
+  --glass-sheet:      rgba(252, 252, 254, 0.88);  /* bottom sheet */
+
+  /* Glass edges — the top hairline is what reads as "pane of glass" */
+  --edge-lit:         rgba(255, 255, 255, 0.90);
+  --edge:             rgba(56, 48, 132, 0.10);
+  --edge-strong:      rgba(56, 48, 132, 0.18);
+
+  /* Solid fallbacks — used when transparency is unavailable or unwanted */
+  --solid:            #FBFAFD;
+  --solid-strong:     #FFFFFF;
+  --solid-faint:      #F5F3F8;
+
+  /* Blur */
+  --blur:             blur(20px) saturate(180%);
+  --blur-heavy:       blur(32px) saturate(190%);
+  --blur-light:       blur(10px) saturate(150%);
+
+  /* Elevation — glass leans on light, not shadow. Kept restrained. */
+  --lift-1:           0 1px 2px rgba(27, 26, 46, 0.04),
+                      0 4px 16px rgba(27, 26, 46, 0.05);
+  --lift-2:           0 2px 4px rgba(27, 26, 46, 0.05),
+                      0 12px 32px rgba(27, 26, 46, 0.09);
+  --lift-risk:        0 2px 4px rgba(163, 78, 6, 0.10),
+                      0 12px 28px rgba(163, 78, 6, 0.14);
+  /* Inset — the opposite of lift. Used only on read-only surfaces, so that
+     "raised" reliably means "you can touch this". */
+  --inset:            inset 0 1px 3px rgba(27, 26, 46, 0.07);
+
+  /* Spacing — base 8 */
+  --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+  --s5: 20px; --s6: 24px; --s8: 32px; --s10: 40px;
+
+  /* Radius — gently rounded. Warmth, not a disciplinary instrument. */
+  --r-sm: 8px; --r-md: 14px; --r-lg: 20px; --r-xl: 28px; --r-pill: 999px;
+
+  /* Type */
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+          "Segoe UI", system-ui, sans-serif;
+
+  /* Hard tokens */
+  --touch: 44px;
+  --frame: 390px;
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* --------------------------------------------------------------------------
+   2. DARK — glass earns its keep here. Same roles, re-lit.
+   Driven by an explicit [data-theme="dark"] attribute (set by hocco-theme.js
+   from the URL, a saved choice, or the OS preference) rather than the OS media
+   query alone — so a presentation can lock a theme regardless of the machine.
+   -------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+    --raspberry:      #F0576F;
+    --raspberry-deep: #D43450;
+    --indigo:         #9A92E8;
+    --indigo-deep:    #6259B8;
+
+    --risk:           #E8A33D;
+    --risk-bright:    #F0B558;
+    --wait:           #9AA3C4;
+    --healthy:        #6BC496;
+    --news:           #3FD293;
+    --brand-a:        #5FBFBD;
+    --brand-b:        #D9A24E;
+
+    --indigo-wash:    rgba(154, 146, 232, 0.16);
+    --indigo-wash-2:  rgba(154, 146, 232, 0.24);
+    --raspberry-wash: rgba(240, 87, 111, 0.16);
+
+    /* Dark widens the amber gap: gold vs burnt orange. */
+    --launch-ontrack: #6BC496;
+    --launch-delayed: #F5C069;
+    --launch-blocked: #E0752E;
+
+    --ink:            #F2F0F8;
+    --ink-2:          #BEBACF;
+    --ink-3:          #8C88A3;
+    --ink-on-solid:   #14121F;
+
+    --ground:         #14121F;
+    --ground-blob-1:  rgba(212, 52, 80, 0.32);
+    --ground-blob-2:  rgba(98, 89, 184, 0.34);
+    --ground-blob-3:  rgba(60, 55, 100, 0.55);
+
+    --glass-faint:    rgba(255, 255, 255, 0.045);
+    --glass:          rgba(255, 255, 255, 0.085);
+    --glass-strong:   rgba(255, 255, 255, 0.14);
+    --glass-chrome:   rgba(26, 24, 42, 0.72);
+    --glass-sheet:    rgba(30, 27, 48, 0.90);
+
+    --edge-lit:       rgba(255, 255, 255, 0.18);
+    --edge:           rgba(255, 255, 255, 0.10);
+    --edge-strong:    rgba(255, 255, 255, 0.20);
+
+    --solid:          #221F35;
+    --solid-strong:   #2A2740;
+    --solid-faint:    #1C1A2C;
+
+    --lift-1:         0 1px 2px rgba(0, 0, 0, 0.30),
+                      0 4px 16px rgba(0, 0, 0, 0.28);
+    --lift-2:         0 2px 4px rgba(0, 0, 0, 0.34),
+                      0 12px 32px rgba(0, 0, 0, 0.40);
+    --lift-risk:      0 2px 4px rgba(0, 0, 0, 0.34),
+                      0 12px 28px rgba(232, 163, 61, 0.18);
+    --inset:          inset 0 1px 3px rgba(0, 0, 0, 0.34);
+}
+
+/* --------------------------------------------------------------------------
+   3. RESET & GROUND
+   -------------------------------------------------------------------------- */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--ground);
+  -webkit-font-smoothing: antialiased;
+  font-size: 15px;
+  line-height: 1.45;
+  min-height: 100vh;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The refraction source. Fixed, so glass stays lively while content scrolls.
+   Deliberately NOT filter: blur() — blurring a full-viewport fixed layer costs a
+   full-screen blur pass on every frame, which is exactly the wrong bill to hand a
+   low-end Android handset (see the accessibility ledger). The radial gradients are
+   already soft, so the blur bought nothing visually. translateZ promotes this to
+   its own compositor layer so it scrolls for free. */
+.ground {
+  position: fixed;
+  inset: -10%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(46% 32% at 82% 6%,  var(--ground-blob-1) 0%, transparent 70%),
+    radial-gradient(52% 36% at 8% 88%,  var(--ground-blob-2) 0%, transparent 72%),
+    radial-gradient(60% 40% at 28% 32%, var(--ground-blob-3) 0%, transparent 70%);
+  transform: translateZ(0);
+}
+
+/* --------------------------------------------------------------------------
+   4. GLASS PRIMITIVES
+   Three depths, mapped to the three-tier attention model.
+   -------------------------------------------------------------------------- */
+.glass,
+.glass-faint,
+.glass-strong {
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border-radius: var(--r-md);
+  position: relative;
+}
+
+.glass-faint  { background: var(--glass-faint);  border: 1px solid transparent; }
+.glass        { background: var(--glass);        border: 1px solid var(--edge); box-shadow: var(--lift-1); }
+.glass-strong { background: var(--glass-strong); border: 1px solid var(--edge-strong); box-shadow: var(--lift-2); }
+
+/* The lit top edge. This single hairline is most of what reads as "glass". */
+.glass::before,
+.glass-strong::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: inherit;
+  background: linear-gradient(90deg,
+    transparent 0%, var(--edge-lit) 22%, var(--edge-lit) 78%, transparent 100%);
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   5. ACCESSIBILITY FALLBACKS
+   If blur is unsupported or the user has asked for less transparency,
+   every glass surface becomes opaque. Nothing depends on the blur.
+   -------------------------------------------------------------------------- */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .glass-faint  { background: var(--solid-faint); }
+  .glass        { background: var(--solid); }
+  .glass-strong { background: var(--solid-strong); }
+  .appbar, .bottomnav { background: var(--solid-strong); }
+  .sheet { background: var(--solid-strong); }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-faint  { background: var(--solid-faint);  backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass        { background: var(--solid);        backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .glass-strong { background: var(--solid-strong); backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .appbar, .bottomnav, .sheet {
+    background: var(--solid-strong); backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .ground { display: none; }
+  body { background: var(--solid-faint); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   6. FRAME & CHROME
+   -------------------------------------------------------------------------- */
+.frame {
+  width: 100%;
+  max-width: var(--frame);
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+  padding: 0 var(--s4);
+}
+
+.appbar {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(var(--frame), 100%);
+  z-index: 40;
+  background: var(--glass-chrome);
+  -webkit-backdrop-filter: var(--blur-heavy);
+  backdrop-filter: var(--blur-heavy);
+  border-bottom: 1px solid var(--edge);
+  padding: var(--s3) var(--s4) var(--s3);
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: 56px;
+}
+
+/* The brand rule. Raspberry→indigo, the two logo colours, as a hairline under
+   the chrome — brand as punctuation, present on every screen, carrying no
+   state meaning of its own. */
+.appbar::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg,
+    var(--raspberry) 0%, var(--indigo) 58%, transparent 100%);
+}
+
+.appbar__title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--indigo);
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.appbar__sub {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+  letter-spacing: 0.01em;
+}
+
+.iconbtn {
+  width: var(--touch);
+  height: var(--touch);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--edge);
+  background: var(--glass-faint);
+  -webkit-backdrop-filter: var(--blur-light);
+  backdrop-filter: var(--blur-light);
+  color: var(--ink-2);
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  cursor: pointer;
+  flex: none;
+  text-decoration: none;
+  position: relative;
+}
+.iconbtn:hover { background: var(--glass); }
+.iconbtn__dot {
+  position: absolute;
+  top: 9px; right: 10px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--raspberry-deep);
+  border: 2px solid var(--glass-chrome);
+}
+
+.screen { padding-top: 80px; padding-bottom: 96px; }
+
+/* Bottom nav — content slides under frosted glass. */
+.bottomnav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(var(--frame), 100%);
+  z-index: 40;
+  background: var(--glass-chrome);
+  -webkit-backdrop-filter: var(--blur-heavy);
+  backdrop-filter: var(--blur-heavy);
+  border-top: 1px solid var(--edge);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: var(--s2) var(--s2) calc(var(--s2) + env(safe-area-inset-bottom, 0px));
+}
+
+.navitem {
+  min-height: var(--touch);
+  border-radius: var(--r-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-decoration: none;
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: var(--s1) 2px;
+}
+.navitem__icon { font-size: 17px; line-height: 1; }
+.navitem[aria-current="page"] {
+  color: var(--raspberry-deep);
+  background: var(--glass-strong);
+  box-shadow: var(--lift-1);
+}
+.navitem { position: relative; }
+.navitem__badge {
+  position: absolute;
+  top: 2px;
+  left: calc(50% + 6px);
+  min-width: 16px; height: 16px;
+  border-radius: var(--r-pill);
+  background: var(--risk);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: grid; place-items: center;
+  padding: 0 4px;
+}
+
+/* --------------------------------------------------------------------------
+   7. TYPE
+   Single family. The spec's second face (Baloo 2) is dropped — with glass
+   doing the decorative work, a rounded display face makes the tool read
+   playful again, which §8 explicitly rejects. Weight and tracking carry
+   the headline voice instead.
+   -------------------------------------------------------------------------- */
+.h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; margin: 0; line-height: 1.15; }
+.h2 { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+.h3 { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; margin: 0; }
+
+/* Micro-label. Used for field labels and deck-level captions only. */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+/* SECTION TITLE — a real header, not a caption.
+   Sits a full step above the row title (17/760 vs 15/620) and carries an
+   indigo accent bar, so the eye lands on structure before content. Indigo is
+   the structural voice (spec §8), which is also what makes the brand present
+   on every screen without ever borrowing the amber risk register. */
+.section__head .eyebrow,
+.eyebrow--section {
+  font-size: 17px;
+  font-weight: 760;
+  letter-spacing: -0.015em;
+  text-transform: none;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.2;
+}
+.section__head .eyebrow::before,
+.eyebrow--section::before {
+  content: "";
+  flex: none;
+  width: 4px;
+  height: 19px;
+  border-radius: var(--r-pill);
+  background: var(--indigo);
+}
+/* An at-risk section is the one place the bar goes amber — the band itself
+   is the warning, so the header must not read as calm structure. */
+.section__head .eyebrow--risk::before,
+.eyebrow--risk::before { background: var(--risk); }
+.meta   { font-size: 12.5px; color: var(--ink-3); }
+.num    { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+/* --------------------------------------------------------------------------
+   8. THE ROW — the atom. Variants ARE the tiers. (spec §8)
+   -------------------------------------------------------------------------- */
+.row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+  border-radius: var(--r-md);
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s2);
+  min-height: var(--touch);
+  position: relative;
+  transition: transform 140ms var(--ease), background 140ms var(--ease);
+}
+/* Touch affordance belongs only to rows that actually do something. A static
+   row (Upcoming, read-only detail) keeps the tier styling but not the promise. */
+a.row, button.row, .row[role="button"] { cursor: pointer; }
+a.row:active, button.row:active, .row[role="button"]:active { transform: scale(0.985); }
+
+/* RECEDE — healthy / done / upcoming. Barely a surface at all. */
+.row--recede {
+  background: var(--glass-faint);
+  border: 1px solid transparent;
+  -webkit-backdrop-filter: var(--blur-light);
+  backdrop-filter: var(--blur-light);
+  color: var(--ink-2);
+}
+.row--recede .row__title { font-weight: 550; color: var(--ink-2); }
+
+/* PRESENT — working / actionable / waiting. A real pane. */
+.row--present {
+  background: var(--glass);
+  border: 1px solid var(--edge);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  box-shadow: var(--lift-1);
+}
+.row--present::before {
+  content: "";
+  position: absolute; inset: 0 0 auto 0; height: 1px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--edge-lit) 25%, var(--edge-lit) 75%, transparent);
+  pointer-events: none;
+}
+
+/* SURFACE — at-risk / blocked / disputed / overdue.
+   Lifted, brighter glass, and a SOLID amber rail. The rail, the icon,
+   the chip and the semibold reason text are all opaque: the signal
+   survives greyscale, colour-blindness and a washed-out screen. */
+.row--surface {
+  background: var(--glass-strong);
+  border: 1px solid var(--edge-strong);
+  -webkit-backdrop-filter: var(--blur-heavy);
+  backdrop-filter: var(--blur-heavy);
+  box-shadow: var(--lift-risk);
+  padding-left: calc(var(--s4) + 5px);
+}
+.row--surface::after {
+  content: "";
+  position: absolute;
+  left: 0; top: 10px; bottom: 10px;
+  width: 4px;
+  border-radius: var(--r-pill);
+  background: var(--risk);           /* solid, not glass */
+}
+.row--surface .row__title { font-weight: 700; }
+
+.row__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  margin-bottom: 3px;
+}
+.row__title {
+  font-size: 15px;
+  font-weight: 620;
+  letter-spacing: -0.012em;
+  flex: 1;
+  min-width: 0;
+}
+.row__label {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+  flex: none;
+}
+
+/* Reason text. Never truncates, at any breakpoint. (spec §8) */
+.row__reason {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-2);
+  overflow-wrap: break-word;
+  white-space: normal;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.row--surface .row__reason { font-weight: 620; color: var(--ink); }
+.row__reason .ico { flex: none; color: var(--risk); font-size: 13px; line-height: 1.35; }
+
+.row__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin-top: var(--s2);
+}
+
+/* --------------------------------------------------------------------------
+   9. CHIPS — state. Always opaque, always carrying a text label.
+   -------------------------------------------------------------------------- */
+/* Chips are LABELS, not controls.
+   A pill with an outline is the universal shape of a button or a dismissible
+   filter chip, so it invited taps it can't honour. These are now flat tags:
+   small corner radius (buttons use 14px), no outline, tinted fill, no shadow,
+   no press state. Nothing here is touchable — the ROW around them is. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 3px 7px;
+  border-radius: 5px;
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Risk stays SOLID and opaque — the accessibility rule outranks the shape
+   language, and a filled tag at 5px radius still reads as a badge, not a button. */
+.chip--risk    { background: var(--risk); color: #fff; }
+.chip--news    { background: var(--news); color: #fff; }
+
+/* Everything else: tinted wash + a darkened text tone that clears AA at 11px. */
+.chip--ok      { background: rgba(63, 132, 96, 0.15);  color: #2C6448; }
+.chip--wait    { background: rgba(74, 85, 120, 0.14);  color: #3A4460; }
+.chip--queued  { background: rgba(27, 26, 46, 0.07);   color: var(--ink-2); }  /* ink-3 measured 4.41:1 — under AA */
+.chip--pending { background: var(--indigo-wash-2);     color: var(--indigo); }
+.chip--brand-a { background: rgba(31, 107, 106, 0.15); color: #17514F; }
+.chip--brand-b { background: rgba(138, 90, 16, 0.15);  color: #6B4508; }
+/* Initiative label — not a state at all. Indigo-voiced, so the row's parent
+   project reads as structure rather than another status to decode. */
+.chip--init    { background: var(--indigo-wash); color: var(--indigo); }
+
+:root[data-theme="dark"] .chip--risk    { background: var(--risk); color: #14121F; }
+:root[data-theme="dark"] .chip--news    { background: var(--news); color: #14121F; }
+:root[data-theme="dark"] .chip--ok      { background: rgba(107, 196, 150, 0.16); color: #8FD8B2; }
+:root[data-theme="dark"] .chip--wait    { background: rgba(154, 163, 196, 0.16); color: #B4BCD8; }
+:root[data-theme="dark"] .chip--queued  { background: rgba(255, 255, 255, 0.09); color: var(--ink-2); }
+:root[data-theme="dark"] .chip--brand-a { background: rgba(95, 191, 189, 0.16);  color: #8AD5D3; }
+:root[data-theme="dark"] .chip--brand-b { background: rgba(217, 162, 78, 0.16);  color: #E6BC7B; }
+
+/* --------------------------------------------------------------------------
+   FILTER BAR — controls, so they wear the outlined-pill button shape, never
+   the flat tag shape (which is reserved for labels). A horizontal, scrollable
+   strip that never pushes content off the right edge.
+   -------------------------------------------------------------------------- */
+.filterbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-bottom: var(--s4);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.filterbar::-webkit-scrollbar { display: none; }
+
+.filterbtn {
+  flex: none;
+  min-height: var(--touch);   /* hard token — real touch target */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--s3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--edge-strong);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--blur-light);
+  backdrop-filter: var(--blur-light);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.filterbtn--active { border-color: var(--indigo); color: var(--indigo); background: var(--indigo-wash); }
+.filterbtn__n {
+  min-width: 17px; height: 17px;
+  border-radius: var(--r-pill);
+  background: var(--indigo); color: #fff;
+  font-size: 10.5px; font-weight: 800;
+  display: grid; place-items: center; padding: 0 4px;
+}
+:root[data-theme="dark"] .filterbtn__n { color: #14121F; }
+
+/* Active-facet pills — removable, so they carry an × and read as controls. */
+.filterpill {
+  flex: none;
+  min-height: var(--touch);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--s3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--indigo);
+  background: var(--indigo-wash);
+  font: inherit; font-size: 12.5px; font-weight: 650;
+  color: var(--indigo);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.filterpill span { font-size: 15px; line-height: 1; opacity: 0.75; }
+.filterbar__clear {
+  flex: none;
+  background: none; border: 0;
+  font: inherit; font-size: 13px; font-weight: 700;
+  color: var(--raspberry-deep);
+  cursor: pointer; padding: 0 var(--s2);
+  white-space: nowrap;
+}
+
+/* Filter sheet groups */
+.fgroup { margin-bottom: var(--s5); }
+.fgroup__label {
+  font-size: 12px; font-weight: 750; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-3); margin: 0 0 var(--s3) 2px;
+}
+.fopts { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.fopt {
+  min-height: var(--touch);
+  padding: 0 var(--s4);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--edge-strong);
+  background: var(--glass-faint);
+  font: inherit; font-size: 13.5px; font-weight: 620;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.fopt--on {
+  border-color: var(--indigo);
+  background: var(--indigo);
+  color: #fff;
+}
+:root[data-theme="dark"] .fopt--on { color: #14121F; }
+
+/* Empty state when filters exclude everything in a section. */
+.emptyfilter {
+  padding: var(--s5) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--glass-faint);
+  box-shadow: var(--inset);
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 13px;
+  margin-bottom: var(--s2);
+}
+
+/* --------------------------------------------------------------------------
+   CALENDAR launch-status indicator — three distinct signals (on-track /
+   delayed / blocked), never colour alone: a coloured rail + an opaque dot
+   + an iconned text label, so it survives greyscale and colour-blindness.
+   -------------------------------------------------------------------------- */
+.cal__row { position: relative; padding-left: calc(var(--s4) + 6px); }
+.cal__rail {
+  position: absolute;
+  left: 0; top: 10px; bottom: 10px;
+  width: 4px;
+  border-radius: var(--r-pill);
+}
+.cal__rail--ontrack { background: var(--launch-ontrack); }
+.cal__rail--delayed { background: var(--launch-delayed); }
+.cal__rail--blocked { background: var(--launch-blocked); }
+
+.cal__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 3px 7px;
+  border-radius: 5px;
+  margin-top: var(--s2);
+}
+/* Blocked stays a SOLID fill; delayed and on-track are tinted — so fill weight
+   separates the three even before hue, keeping the signal greyscale-safe. */
+.cal__status--ontrack { background: rgba(63, 132, 96, 0.15);  color: #2C6448; }
+.cal__status--delayed { background: rgba(199, 122, 16, 0.18); color: #8A5410; }
+.cal__status--blocked { background: var(--launch-blocked); color: #fff; }
+:root[data-theme="dark"] .cal__status--ontrack { background: rgba(107, 196, 150, 0.18); color: #8FD8B2; }
+:root[data-theme="dark"] .cal__status--delayed { background: rgba(245, 192, 105, 0.20); color: #F5C069; }
+:root[data-theme="dark"] .cal__status--blocked { background: var(--launch-blocked); color: #14121F; }
+
+/* Inline text link inside a row foot — genuinely tappable, so it looks it. */
+.rowlink {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--raspberry-deep);
+  text-decoration: none;
+  padding: 4px 0;
+}
+.rowlink:hover { text-decoration: underline; }
+
+/* --------------------------------------------------------------------------
+   10. THE TRACK LANE — collapsed parallel track, gate markers,
+   dependencies on demand. (spec §8, §7)
+   -------------------------------------------------------------------------- */
+.lane {
+  background: var(--glass);
+  border: 1px solid var(--edge);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border-radius: var(--r-md);
+  box-shadow: var(--lift-1);
+  margin-bottom: var(--s3);
+  overflow: hidden;
+  position: relative;
+}
+.lane--blocked {
+  background: var(--glass-strong);
+  border-color: var(--edge-strong);
+  box-shadow: var(--lift-risk);
+}
+.lane--blocked::after {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: var(--risk);
+}
+.lane--done { background: var(--glass-faint); border-color: transparent; box-shadow: none; }
+
+.lane__head {
+  width: 100%;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  padding: var(--s3) var(--s4);
+  min-height: var(--touch);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+.lane--blocked .lane__head { padding-left: calc(var(--s4) + 5px); }
+.lane__name { font-size: 14.5px; font-weight: 680; letter-spacing: -0.01em; flex: 1; min-width: 0; }
+.lane__caret { color: var(--ink-3); font-size: 12px; transition: transform 180ms var(--ease); }
+.lane[open] .lane__caret, .lane__head[aria-expanded="true"] .lane__caret { transform: rotate(90deg); }
+
+/* The progression strip: stages as segments, gates as diamonds. */
+.lane__strip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 var(--s4) var(--s3);
+}
+.lane--blocked .lane__strip { padding-left: calc(var(--s4) + 5px); }
+
+.seg {
+  height: 6px;
+  flex: 1;
+  border-radius: var(--r-pill);
+  background: var(--edge-strong);
+}
+.seg--done    { background: var(--healthy); }
+.seg--active  { background: var(--indigo); }
+.seg--blocked { background: var(--risk); }
+.seg--wait    { background: var(--wait); opacity: 0.5; }
+
+.gate {
+  flex: none;
+  width: 18px; height: 18px;
+  display: grid; place-items: center;
+  position: relative;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.gate__mark { transform: rotate(45deg); width: 9px; height: 9px; border: 1.5px solid currentColor; border-radius: 2px; }
+.gate--passed  { color: var(--healthy); }
+.gate--passed .gate__mark { background: currentColor; }
+.gate--pending { color: var(--indigo); }
+.gate--failed  { color: var(--risk); }
+.gate--failed .gate__mark { background: currentColor; }
+.gate__rev {
+  position: absolute;
+  top: -3px; right: -5px;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--risk);
+}
+
+.lane__body {
+  padding: 0 var(--s4) var(--s3);
+  border-top: 1px solid var(--edge);
+  padding-top: var(--s3);
+}
+.lane--blocked .lane__body { padding-left: calc(var(--s4) + 5px); }
+
+/* Dependencies: hidden at rest, revealed on tap — EXCEPT the critical
+   dependency of a blocked stage, which is shown by default. (spec §7) */
+.dep {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  background: var(--glass-faint);
+  border-left: 2px solid var(--wait);
+  margin-top: var(--s2);
+}
+.dep--critical { border-left-color: var(--risk); color: var(--ink); font-weight: 560; }
+
+/* --------------------------------------------------------------------------
+   11. BUTTONS
+   -------------------------------------------------------------------------- */
+.btn {
+  min-height: var(--touch);
+  border-radius: var(--r-md);
+  padding: var(--s3) var(--s5);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  text-decoration: none;
+  transition: transform 120ms var(--ease);
+}
+.btn:active { transform: scale(0.97); }
+
+/* Primary action is SOLID raspberry — an action must never be a
+   translucent surface the eye can mistake for chrome. */
+.btn--primary {
+  background: var(--raspberry-deep);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(179, 37, 64, 0.28);
+}
+.btn--ghost {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border-color: var(--edge-strong);
+  color: var(--ink);
+}
+.btn--risk { background: var(--risk); color: #fff; }
+.btn--block { width: 100%; }
+
+:root[data-theme="dark"] .btn--risk { color: #14121F; }
+
+/* --------------------------------------------------------------------------
+   12. BOTTOM SHEET — the make-or-break interaction (spec §7, §9).
+   Thumb zone. Heavy frost so the list stays legible behind it.
+   -------------------------------------------------------------------------- */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(20, 18, 31, 0.32);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms var(--ease);
+}
+.scrim[data-open="true"] { opacity: 1; pointer-events: auto; }
+
+.sheet {
+  position: fixed;
+  z-index: 51;
+  bottom: 0;
+  left: 50%;
+  width: min(var(--frame), 100%);
+  transform: translate(-50%, 100%);
+  background: var(--glass-sheet);
+  -webkit-backdrop-filter: var(--blur-heavy);
+  backdrop-filter: var(--blur-heavy);
+  border-top: 1px solid var(--edge-lit);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  box-shadow: 0 -8px 40px rgba(27, 26, 46, 0.22);
+  padding: var(--s3) var(--s4) calc(var(--s6) + env(safe-area-inset-bottom, 0px));
+  transition: transform 300ms var(--ease);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.sheet[data-open="true"] { transform: translate(-50%, 0); }
+
+.sheet__grip {
+  width: 38px; height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--edge-strong);
+  margin: 0 auto var(--s4);
+}
+
+.sheet__opt {
+  width: 100%;
+  min-height: 52px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--edge);
+  background: var(--glass-faint);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 620;
+  color: var(--ink);
+  text-align: left;
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+.sheet__opt:hover { background: var(--glass); }
+.sheet__opt .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.sheet__opt small { display: block; font-size: 12px; font-weight: 500; color: var(--ink-3); }
+
+/* --------------------------------------------------------------------------
+   13. SECTIONS, TABS, BANDS
+   -------------------------------------------------------------------------- */
+.section { margin-bottom: var(--s8); }
+.section__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+  padding: 0 2px;
+}
+.section__head .count {
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--indigo);
+  background: var(--indigo-wash);
+  border: 0;
+  border-radius: var(--r-pill);
+  padding: 2px 9px;
+}
+.section__head .eyebrow--risk ~ .count { color: var(--risk); background: rgba(163, 78, 6, 0.10); }
+
+.tabs {
+  display: flex;
+  gap: var(--s1);
+  padding: var(--s1);
+  border-radius: var(--r-md);
+  background: var(--glass-faint);
+  border: 1px solid var(--edge);
+  -webkit-backdrop-filter: var(--blur-light);
+  backdrop-filter: var(--blur-light);
+  margin-bottom: var(--s5);
+}
+.tab {
+  flex: 1;
+  min-height: var(--touch);   /* hard token — tabs are real touch targets */
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink-3);
+  cursor: pointer;
+  position: relative;
+}
+.tab[aria-selected="true"] {
+  background: var(--glass-strong);
+  color: var(--indigo);
+  font-weight: 720;
+  box-shadow: var(--lift-1);
+}
+/* Raspberry underline on the selected tab. Raspberry stays reserved for
+   "you touched this" — a selected control is an action state, not a warning,
+   so it does not dilute the action/risk separation. */
+.tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 22%; right: 22%; bottom: 6px;
+  height: 2.5px;
+  border-radius: var(--r-pill);
+  background: var(--raspberry-deep);
+}
+
+/* Summary strip — keeps Zone 2 / risk counts visible above the fold (§10).
+   READ-ONLY. It must never be mistaken for a row: rows are separate raised
+   panes you can touch, so this is a single recessed well with hairline
+   dividers — one object, carved in rather than floating, no gaps, no lift.
+   "Raised means touchable" is the affordance rule the whole screen leans on. */
+.strip {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--s5);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--glass-faint);
+  border: 0;                 /* no outline — the tab group above owns that
+                                treatment, and it IS a control */
+  box-shadow: var(--inset);
+  -webkit-backdrop-filter: var(--blur-light);
+  backdrop-filter: var(--blur-light);
+  cursor: default;
+}
+.strip__cell {
+  flex: 1;
+  padding: var(--s3) var(--s2);
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--edge);
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  text-align: center;
+}
+.strip__cell:first-child { border-left: 0; }
+.strip__n { font-size: 22px; font-weight: 740; letter-spacing: -0.03em; line-height: 1.1; color: var(--indigo); }
+.strip__l { font-size: 10.5px; font-weight: 650; color: var(--ink-3); letter-spacing: 0.02em; margin-top: 2px; }
+.strip__cell--risk .strip__n { color: var(--risk); }
+.strip__cell--wait .strip__n { color: var(--wait); }
+
+/* Working-vs-waiting bar — the delay breakdown (§7) */
+.wvw { display: flex; height: 12px; border-radius: var(--r-pill); overflow: hidden; background: var(--edge); }
+.wvw__working { background: var(--indigo); }
+.wvw__waiting { background: var(--wait); }
+.wvw__blocked { background: var(--risk); }
+
+.legend { display: flex; gap: var(--s4); flex-wrap: wrap; margin-top: var(--s3); }
+.legend__item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.legend__sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+.divider { height: 1px; background: var(--edge); margin: var(--s5) 0; border: 0; }
+
+/* Toast — confirmation without a modal. */
+.toast {
+  position: fixed;
+  z-index: 60;
+  bottom: 104px;
+  left: 50%;
+  transform: translate(-50%, 12px);
+  width: min(calc(var(--frame) - 32px), calc(100% - 32px));
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  font-size: 13.5px;
+  font-weight: 560;
+  color: var(--ink);
+  opacity: 0;
+  transition: opacity 260ms var(--ease), transform 260ms var(--ease);
+  pointer-events: none;
+}
+.toast[data-in="true"] { opacity: 1; transform: translate(-50%, 0); }
+
+/* The unblock transition — the highest-value moment (spec §7).
+   Elevates prominently, but never modally. */
+@keyframes unblock-lift {
+  0%   { box-shadow: var(--lift-1);  transform: translateY(0); }
+  35%  { box-shadow: 0 8px 34px rgba(22,133,91,0.30); transform: translateY(-3px); }
+  100% { box-shadow: var(--lift-1);  transform: translateY(0); }
+}
+.row--unblocked { animation: unblock-lift 900ms var(--ease) 1; }
+.row--unblocked::after {
+  content: "";
+  position: absolute; left: 0; top: 10px; bottom: 10px;
+  width: 4px; border-radius: var(--r-pill);
+  background: var(--news);
+}
+.row--unblocked { padding-left: calc(var(--s4) + 5px); }
+
+/* The "Done" settle — done lingers, dimmed and undoable (spec §7). */
+.row--settled { opacity: 0.55; }
+.row--settled .row__title { text-decoration: line-through; text-decoration-thickness: 1px; }
+.undo {
+  background: none; border: 0; font: inherit; font-size: 12.5px; font-weight: 700;
+  color: var(--raspberry-deep); cursor: pointer; padding: 4px 0; text-decoration: underline;
+}
+
+/* Desktop courtesy frame — the design lives at 390px; this just stops the
+   prototype floating in a void on a 1440px monitor. */
+@media (min-width: 900px) {
+  .frame { box-shadow: 0 0 0 1px var(--edge), 0 30px 90px rgba(27,26,46,0.16); border-radius: 0; }
+}

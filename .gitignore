@@ -1,0 +1,9 @@
+# Secret keys — never commit
+.env
+.env.*
+
+# Mac system files
+.DS_Store
+
+# Claude's local preview settings
+.claude/

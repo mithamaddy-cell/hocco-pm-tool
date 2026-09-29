@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blockers — Hocco PM</title>
+<script src="hocco-theme.js?v=12"></script>
+<link rel="stylesheet" href="hocco-tokens.css?v=12">
+<style>
+  .claim { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 620; margin-top: 2px; }
+  .claim .arrow { color: var(--ink-3); }
+  .claim .from { color: var(--ink-2); }
+  .claim .to   { color: var(--risk); }
+  .actions { display: flex; gap: var(--s2); margin-top: var(--s3); }
+  .actions .btn { flex: 1; min-height: 40px; font-size: 13.5px; }
+</style>
+</head>
+<body>
+<div class="ground" aria-hidden="true"></div>
+
+<header class="appbar">
+  <div style="flex:1;min-width:0">
+    <h1 class="appbar__title">Blockers</h1>
+    <div class="appbar__sub" id="sub"></div>
+  </div>
+  <a class="iconbtn" href="#" aria-label="Notifications">◔<span class="iconbtn__dot"></span></a>
+</header>
+
+<main class="frame screen">
+
+  <!-- Filter by the held-up initiative's brand / category / priority. -->
+  <div class="filterbar" id="filter-b"></div>
+
+  <!-- Disputes live here rather than on either party's home screen —
+       neutral ground, by design (spec §7). -->
+  <section class="section">
+    <div class="section__head"><p class="eyebrow">Disputed</p><span class="count num" id="cd"></span></div>
+    <p class="meta" style="margin:-4px 0 var(--s3);padding:0 var(--s1)">
+      A blocker is a claim until the named party acknowledges it. Unresolved disputes
+      escalate to <b>both</b> HODs after 2–3 days — both, never one chain, because one chain implies fault.
+    </p>
+    <div id="disputed"></div>
+  </section>
+
+  <section class="section">
+    <div class="section__head"><p class="eyebrow">Open &amp; acknowledged</p><span class="count num" id="co"></span></div>
+    <p class="meta" style="margin:-4px 0 var(--s3);padding:0 var(--s1)">
+      Acknowledged means the delay is agreed, not that anyone is at fault.
+    </p>
+    <div id="open"></div>
+  </section>
+
+  <hr class="divider">
+  <p class="meta" style="text-align:center">
+    Days accumulate against a <b>step</b>, never against a person or a team.
+    No blocker on this screen rolls up into a score.
+  </p>
+
+</main>
+
+<div id="nav"></div>
+
+<script src="hocco-data.js?v=12"></script>
+<script src="hocco-ui.js?v=12"></script>
+<script>
+(function () {
+  var D = window.HOCCO, U = window.UI;
+  var disputed = D.blockers.filter(function (b) { return b.state === "disputed"; });
+  var open     = D.blockers.filter(function (b) { return b.state === "open"; });
+
+  document.getElementById("sub").textContent = D.blockers.length + " open · " + disputed.length + " disputed";
+  document.getElementById("nav").innerHTML = U.bottomNav("blockers", disputed.length);
+  document.getElementById("cd").textContent = disputed.length;
+  document.getElementById("co").textContent = open.length;
+
+  /* Blocker → the initiative it is holding up. */
+  var INIT_ID = {};
+  D.initiatives.forEach(function (i) { INIT_ID[i.name] = i.id; });
+
+  function card(b) {
+    var tier = b.state === "disputed" ? "surface" : "present";
+    var icon = b.state === "disputed" ? '<span class="ico" aria-hidden="true">▲</span>' : "";
+    return '<div class="row row--' + tier + '">' +
+      '<div class="row__head"><span class="row__title">' + U.esc(b.title) + "</span>" +
+      '<span class="row__label num">' + b.days + " days</span></div>" +
+      '<div class="claim">' + icon +
+        '<span class="from">' + U.esc(b.raisedBy) + "</span>" +
+        '<span class="arrow" aria-hidden="true">→</span>' +
+        '<span class="' + (b.state === "disputed" ? "to" : "from") + '">' + U.esc(b.against) + "</span>" +
+      "</div>" +
+      '<div class="row__reason" style="margin-top:6px">' + U.esc(b.note) + "</div>" +
+      '<div class="row__foot"><span class="chip chip--init">' + U.esc(b.initiative) + "</span>" +
+        (b.state === "disputed" ? U.stateChip("Disputed") : "") +
+        '<a class="rowlink" href="hocco-initiative-detail.html?id=' +
+          encodeURIComponent(INIT_ID[b.initiative] || "") + '">View initiative →</a>' +
+      "</div>" +
+      (b.state === "disputed"
+        ? '<div class="actions"><button class="btn btn--primary" data-ack>Acknowledge</button>' +
+          '<button class="btn btn--ghost" data-dispute>This isn’t ours</button></div>'
+        : "") +
+    "</div>";
+  }
+
+  /* A blocker's filterable attributes come from the initiative it holds up. */
+  function initOf(b) { return D.byName[b.initiative] || D.byId[INIT_ID[b.initiative]] || null; }
+
+  function renderLists(matchFn) {
+    var d = disputed.filter(function (b) { return matchFn(initOf(b)); });
+    var o = open.filter(function (b) { return matchFn(initOf(b)); });
+    document.getElementById("cd").textContent = d.length;
+    document.getElementById("co").textContent = o.length;
+    document.getElementById("disputed").innerHTML = d.length ? d.map(card).join("")
+      : '<div class="emptyfilter">No disputed blockers match the filter.</div>';
+    document.getElementById("open").innerHTML = o.length ? o.map(card).join("")
+      : '<div class="emptyfilter">No open blockers match the filter.</div>';
+  }
+  renderLists(function () { return true; });
+  U.filters(document.getElementById("filter-b"), renderLists);
+
+  document.body.addEventListener("click", function (e) {
+    if (e.target.closest("[data-ack]")) {
+      var row = e.target.closest(".row");
+      row.classList.replace("row--surface", "row--present");
+      row.querySelector(".actions").remove();
+      row.querySelector(".row__reason").textContent = "Acknowledged just now. Escalation cancelled.";
+      U.toast("Acknowledged. The clock keeps running on the step, not on you.");
+    }
+    if (e.target.closest("[data-dispute]")) {
+      U.toast("Marked as disputed. Both HODs will see it — neither is asked to take a side.");
+    }
+  });
+})();
+</script>
+</body>
+</html>

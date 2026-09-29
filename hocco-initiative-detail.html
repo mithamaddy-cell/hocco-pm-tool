@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mango Kulfi 750ml — Hocco PM</title>
+<script src="hocco-theme.js?v=12"></script>
+<link rel="stylesheet" href="hocco-tokens.css?v=12">
+<style>
+  /* GLANCE — header. Health, launch, lateness, in that order. */
+  .glance { padding: var(--s5) var(--s4); margin-bottom: var(--s5); border-radius: var(--r-lg); }
+  .glance__name { font-size: 23px; font-weight: 730; letter-spacing: -0.03em; margin: 0 0 var(--s2); line-height: 1.15; }
+  .glance__chips { display: flex; gap: var(--s2); flex-wrap: wrap; margin-bottom: var(--s4); }
+  .glance__facts { display: flex; gap: var(--s5); }
+  .fact__l { font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+  .fact__v { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+  .fact__v--late { color: var(--risk); }
+  .diagnosis {
+    margin-top: var(--s4); padding: var(--s3) var(--s4);
+    /* Square left edge — a rounded corner turns the 4px rail into a bracket
+       shape on short one-line diagnoses. */
+    border-radius: 0 var(--r-md) var(--r-md) 0;
+    background: var(--glass-faint);
+    border-left: 4px solid var(--risk);
+    font-size: 13.5px; font-weight: 600; line-height: 1.45; color: var(--ink);
+  }
+
+  .stage { display: flex; gap: var(--s3); padding: var(--s2) 0; align-items: flex-start; }
+  .stage__pip { flex: none; width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; background: var(--edge-strong); }
+  .stage__pip--done    { background: var(--healthy); }
+  .stage__pip--working { background: var(--indigo); }
+  .stage__pip--blocked { background: var(--risk); }
+  .stage__pip--queued  { background: var(--wait); opacity: 0.6; }
+  .stage__n { font-size: 14px; font-weight: 620; }
+  .stage--done .stage__n { font-weight: 520; color: var(--ink-3); }
+  .stage__m { font-size: 12px; color: var(--ink-3); }
+  .stage__who { font-size: 12px; color: var(--ink-2); font-weight: 600; }
+
+  /* GATE DETAIL — the rejection history is what turns "3rd revision"
+     from blame into diagnosis (spec §5). */
+  .gatecard { margin-top: var(--s3); padding: var(--s3) var(--s4); border-radius: var(--r-md); }
+  .rev { padding: var(--s3) 0; border-top: 1px solid var(--edge); }
+  .rev:first-of-type { border-top: 0; }
+  .rev__h { display: flex; align-items: baseline; gap: var(--s2); }
+  .rev__n { font-size: 11px; font-weight: 800; color: var(--ink-3); letter-spacing: 0.05em; }
+  .rev__d { font-size: 11.5px; color: var(--ink-3); margin-left: auto; }
+  .rev__r { font-size: 13.5px; font-weight: 650; margin-top: 2px; }
+  .rev__by { font-size: 12px; color: var(--ink-2); }
+  .rev__note { font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+  .flag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 750;
+          padding: 2px 8px; border-radius: var(--r-pill); margin-top: var(--s2); }
+  .flag--repeat   { background: var(--risk); color: #fff; }
+  .flag--upstream { background: transparent; color: var(--indigo); border: 1px solid var(--indigo); }
+  :root[data-theme="dark"] .flag--repeat { color: #14121F; }
+
+  .bd { padding: var(--s5) var(--s4); border-radius: var(--r-lg); }
+  .bd__n { font-size: 30px; font-weight: 740; letter-spacing: -0.04em; line-height: 1; }
+  .bd__row { display: flex; justify-content: space-between; align-items: baseline;
+             padding: var(--s3) 0; border-top: 1px solid var(--edge); font-size: 13.5px; }
+  .bd__row b { font-weight: 700; }
+
+  .tl { position: relative; padding-left: var(--s5); }
+  .tl::before { content: ""; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 2px; background: var(--edge); }
+  .tl__item { position: relative; padding: var(--s2) 0 var(--s3); }
+  .tl__item::before { content: ""; position: absolute; left: calc(-1 * var(--s5) + 1px); top: 12px;
+                      width: 10px; height: 10px; border-radius: 50%; background: var(--wait); }
+  .tl__item--bad::before  { background: var(--risk); }
+  .tl__item--good::before { background: var(--healthy); }
+  .tl__d { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); }
+  .tl__t { font-size: 14px; font-weight: 620; }
+  .tl__s { font-size: 12.5px; color: var(--ink-3); }
+
+  .file { display: flex; gap: var(--s3); align-items: center; padding: var(--s3) var(--s4);
+          margin-bottom: var(--s2); border-radius: var(--r-md); }
+  .file__ic { flex: none; width: 34px; height: 34px; border-radius: var(--r-sm);
+              background: var(--glass-faint); border: 1px solid var(--edge);
+              display: grid; place-items: center; font-size: 13px; color: var(--ink-3); }
+  .file__n { font-size: 13.5px; font-weight: 620; }
+  .file__m { font-size: 11.5px; color: var(--ink-3); }
+
+  .panel { display: none; } .panel[data-active="true"] { display: block; }
+</style>
+</head>
+<body>
+<div class="ground" aria-hidden="true"></div>
+
+<header class="appbar">
+  <a class="iconbtn" href="hocco-portfolio-mobile.html" id="back" aria-label="Back">‹</a>
+  <div style="flex:1;min-width:0">
+    <h1 class="appbar__title" id="bar-name">Initiative</h1>
+    <div class="appbar__sub" id="bar-sub"></div>
+  </div>
+  <a class="iconbtn" href="#" aria-label="Notifications">◔</a>
+</header>
+
+<main class="frame screen">
+
+  <!-- ================= GLANCE ================= -->
+  <section class="glass-strong glance">
+    <h2 class="glance__name" id="g-name"></h2>
+    <div class="glance__chips" id="gchips"></div>
+    <div class="glance__facts" id="gfacts"></div>
+    <p class="diagnosis" id="gdiag"></p>
+    <p class="meta" style="margin:var(--s3) 0 0" id="gowner"></p>
+  </section>
+
+  <div class="tabs" role="tablist" aria-label="Initiative views">
+    <button class="tab" role="tab" aria-selected="true"  data-panel="tracks">Tracks</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="timeline">Timeline</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="delay">Delay</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="files">Files</button>
+  </div>
+
+  <!-- ================= TRACKS ================= -->
+  <section class="panel" data-active="true" id="p-tracks" role="tabpanel">
+    <p class="meta" style="margin:0 0 var(--s4);padding:0 2px" id="tracks-note"></p>
+    <div id="tracks"></div>
+  </section>
+
+  <!-- ================= TIMELINE ================= -->
+  <section class="panel" id="p-timeline" role="tabpanel">
+    <div class="tl" id="tl"></div>
+  </section>
+
+  <!-- ================= DELAY BREAKDOWN ================= -->
+  <section class="panel" id="p-delay" role="tabpanel">
+    <div class="glass-strong bd">
+      <div class="fact__l" id="bd-of"></div>
+      <div class="bd__n num" id="bd-head"></div>
+      <div class="wvw" style="margin:var(--s4) 0 var(--s3)" id="wvw"></div>
+      <div class="legend" style="margin-top:0" id="bd-legend"></div>
+    </div>
+
+    <div class="section" style="margin-top:var(--s5)">
+      <div class="section__head"><p class="eyebrow">Where the time went</p></div>
+      <div class="glass" style="padding:var(--s2) var(--s4) var(--s3)" id="bd-rows"></div>
+      <p class="meta" style="margin-top:var(--s3);padding:0 2px">
+        This points at a process step, not a person. Attribution stays at event level and is
+        never rolled up into a departmental score.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= FILES ================= -->
+  <section class="panel" id="p-files" role="tabpanel">
+    <p class="meta" style="margin:0 0 var(--s4);padding:0 var(--s1)">
+      Versioned against gate revisions — the next file after a rejection is v2 of that gate.
+      The record of what was approved lives here; production files stay in Hocco’s cloud.
+    </p>
+    <div id="files"></div>
+  </section>
+
+</main>
+
+<div id="nav"></div>
+
+<script src="hocco-data.js?v=12"></script>
+<script src="hocco-ui.js?v=12"></script>
+<script>
+(function () {
+  var D = window.HOCCO, U = window.UI;
+
+  /* Any initiative can be opened by id. The hero returns its hand-modelled
+     graph; everything else is composed from its template (spec §6). */
+  var id = new URLSearchParams(location.search).get("id");
+  var K = D.getInitiative(id);
+  var isHero = !K.synthesized;
+
+  document.title = K.name + " — Hocco PM";
+  document.getElementById("bar-name").textContent = K.name;
+  document.getElementById("bar-sub").textContent =
+    K.type + " · " + (K.brand === "Shared" ? "Both brands" : "Brand " + K.brand);
+  document.getElementById("g-name").textContent = K.name;
+  document.getElementById("gowner").textContent = "Owner: " + K.owner;
+
+  document.getElementById("nav").innerHTML = U.bottomNav("portfolio", 1);
+  document.getElementById("gchips").innerHTML =
+    U.stateChip(K.state || "Blocked") + U.brandChip(K.brand) +
+    '<span class="chip chip--init">' + U.esc(K.type) + "</span>";
+
+  /* Glance facts. An unprioritised initiative has no clock running, so it
+     shows what it is waiting for rather than a fake elapsed count. */
+  document.getElementById("gfacts").innerHTML = K.band === "pending"
+    ? '<div><div class="fact__l">Launch</div><div class="fact__v">Not set</div></div>' +
+      '<div><div class="fact__l">Status</div><div class="fact__v">Unprioritised</div></div>'
+    : '<div><div class="fact__l">Launch</div><div class="fact__v num">' + U.esc(K.launch.replace(" 2026", "")) + "</div></div>" +
+      '<div><div class="fact__l">Elapsed</div><div class="fact__v num">' + K.elapsed + " days</div></div>" +
+      (K.late ? '<div><div class="fact__l">Late by</div><div class="fact__v fact__v--late num">' + K.late + " days</div></div>" : "");
+
+  /* The diagnosis line. Troubled initiatives surface their own problem;
+     healthy ones stay quiet rather than inventing drama (spec §3). */
+  var diag = document.getElementById("gdiag");
+  if (isHero) {
+    diag.innerHTML = "▲ Stuck at <b>Packaging · Artwork Approval</b> — 3rd revision, and the same " +
+      "reason twice. On current evidence, expect launch to slip to <b>23 Sep</b>.";
+  } else if (K.band === "risk") {
+    diag.innerHTML = "▲ " + U.esc(K.reason) + ".";
+  } else if (K.band === "pending") {
+    diag.style.borderLeftColor = "var(--indigo)";
+    diag.innerHTML = "Awaiting prioritisation. Nothing is resourced until the CEO places it — " +
+      "which is what makes open creation safe.";
+  } else {
+    diag.style.borderLeftColor = "var(--healthy)";
+    diag.style.fontWeight = "500";
+    diag.innerHTML = U.esc(K.reason) + ". No blockers, no stale stages.";
+  }
+
+  var b = K.breakdown, tot = b.working + b.waiting + b.blocked;
+  document.getElementById("bd-of").textContent = "Of " + K.elapsed + " elapsed days";
+  document.getElementById("bd-head").textContent = tot
+    ? (b.waiting + b.blocked) + " were spent waiting"
+    : "Not started yet";
+  document.getElementById("wvw").innerHTML = tot
+    ? '<i class="wvw__working" style="width:' + (b.working / tot * 100) + '%"></i>' +
+      '<i class="wvw__waiting" style="width:' + (b.waiting / tot * 100) + '%"></i>' +
+      '<i class="wvw__blocked" style="width:' + (b.blocked / tot * 100) + '%"></i>'
+    : "";
+  document.getElementById("bd-legend").innerHTML = tot
+    ? '<span class="legend__item"><i class="legend__sw" style="background:var(--indigo)"></i>Working ' + b.working + "</span>" +
+      '<span class="legend__item"><i class="legend__sw" style="background:var(--wait)"></i>Waiting ' + b.waiting + "</span>" +
+      (b.blocked ? '<span class="legend__item"><i class="legend__sw" style="background:var(--risk)"></i>Blocked ' + b.blocked + "</span>" : "")
+    : "";
+
+  document.getElementById("bd-rows").innerHTML = isHero
+    ? '<div class="bd__row" style="border-top:0"><span>Packaging · Artwork Approval loop</span><b class="num">11 days</b></div>' +
+      '<div class="bd__row"><span>Codes/BOM queued behind Packaging</span><b class="num">6 days</b></div>' +
+      '<div class="bd__row"><span>Recipe · sensory panel scheduling</span><b class="num">4 days</b></div>' +
+      '<div class="bd__row"><span>Procurement · quote turnaround</span><b class="num">3 days</b></div>'
+    : (tot
+        ? K.tracks.map(function (t, i) {
+            var d = t.state === "blocked" ? Math.max(2, K.late) : (t.state === "queued" ? 2 : 1);
+            return '<div class="bd__row"' + (i === 0 ? ' style="border-top:0"' : "") + "><span>" +
+              U.esc(t.name) + " · " + U.esc(t.state === "blocked" ? "blocked" : t.state) +
+              '</span><b class="num">' + d + " days</b></div>";
+          }).join("")
+        : '<div class="bd__row" style="border-top:0"><span>Nothing to break down — work has not started</span></div>');
+
+  /* Timeline. The hero has a real rework rhythm to show; others get the
+     progression their template has actually reached. */
+  document.getElementById("tl").innerHTML = isHero
+    ? [
+        ["good", "9 Jul",  "Initiative created", "Prioritised by CEO the same day"],
+        ["good", "18 Jul", "Structural spec closed", "Supply Chain → Marketing handoff"],
+        ["bad",  "22 Jul", "Artwork Approval rejected — rev 1", "Statutory declarations incorrect"],
+        ["bad",  "30 Jul", "Artwork Approval rejected — rev 2", "Same reason as rev 1 · flagged"],
+        ["good", "4 Aug",  "Recipe signed off", "Spec revised at sign-off — changed the nutritional panel"],
+        ["bad",  "6 Aug",  "Artwork Approval rejected — rev 3", "Nutritional panel mismatch · upstream-caused"],
+        ["",     "Today",  "Artwork v4 due", "Codes/BOM has been queued behind this for 6 days"]
+      ].map(tlItem).join("")
+    : K.band === "pending"
+      ? tlItem(["", "Created", "Initiative created", "Sitting in Awaiting Prioritisation"])
+      : K.tracks.reduce(function (acc, t) {
+          t.stages.forEach(function (s) {
+            if (s.state === "done")    acc.push(["good", "Closed",  t.name + " · " + s.name, "Completed"]);
+            if (s.state === "blocked") acc.push(["bad",  "Now",     t.name + " · " + s.name, K.reason]);
+            if (s.state === "working") acc.push(["",     "Now",     t.name + " · " + s.name, "In progress"]);
+          });
+          return acc;
+        }, []).map(tlItem).join("");
+
+  function tlItem(a) {
+    return '<div class="tl__item' + (a[0] ? " tl__item--" + a[0] : "") + '">' +
+      '<div class="tl__d">' + U.esc(a[1]) + "</div>" +
+      '<div class="tl__t">' + U.esc(a[2]) + "</div>" +
+      '<div class="tl__s">' + U.esc(a[3]) + "</div></div>";
+  }
+
+  document.getElementById("tracks-note").innerHTML = K.tracks.length > 1
+    ? K.tracks.length + " parallel tracks. Not a Gantt — the delays here are <i>waiting</i>, which a Gantt renders badly."
+    : "A single approval chain. Small initiatives belong in the tool too — if only big projects fit, it starves.";
+
+  /* ---- Track lanes. Vertical stacked cards at 390px — horizontal lanes
+     don't fit (spec §9). Blocked track expanded by default; expanding one
+     collapses the others, which keeps the screen calm. ---- */
+  function strip(t) {
+    return '<div class="lane__strip">' + t.strip.map(function (p) {
+      if (p.t === "seg") return '<i class="seg' + (p.k ? " seg--" + p.k : "") + '"></i>';
+      var cls = "gate gate--" + p.k;
+      return '<span class="' + cls + '" title="Gate">' +
+        '<i class="gate__mark"></i>' +
+        (p.rev ? '<span class="gate__rev num">' + p.rev + "</span>" : "") +
+      "</span>";
+    }).join("") + "</div>";
+  }
+
+  function gateCard(g) {
+    return '<div class="glass-strong gatecard">' +
+      '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:var(--s2)">' +
+        '<span class="h3">' + U.esc(g.name) + "</span>" +
+        '<span class="chip chip--risk" style="margin-left:auto">▲ ' + g.revisions + " revisions</span>" +
+      "</div>" +
+      g.history.slice().reverse().map(function (r) {
+        return '<div class="rev">' +
+          '<div class="rev__h"><span class="rev__n">REV ' + r.rev + '</span><span class="rev__d num">' + U.esc(r.date) + "</span></div>" +
+          '<div class="rev__r">' + U.esc(r.reason) + "</div>" +
+          '<div class="rev__by">Rejected by ' + U.esc(r.by) + "</div>" +
+          (r.note ? '<div class="rev__note">' + U.esc(r.note) + "</div>" : "") +
+          r.flags.map(function (f) {
+            return f === "repeat"
+              ? '<span class="flag flag--repeat">▲ Same reason as rev ' + (r.rev - 1) + " — a communication failure, not a skill one</span>"
+              : '<span class="flag flag--upstream">Upstream-caused — the recipe spec changed on 4 Aug</span>';
+          }).join(" ") +
+        "</div>";
+      }).join("") +
+    "</div>";
+  }
+
+  document.getElementById("tracks").innerHTML = K.tracks.map(function (t) {
+    var mod = t.state === "blocked" ? " lane--blocked" : (t.state === "done" ? " lane--done" : "");
+    var open = t.state === "blocked";
+    var chip = { blocked: "Blocked", done: "On track", queued: "Queued", working: "On track" }[t.state];
+    var chipCls = { blocked: "risk", done: "ok", queued: "queued", working: "ok" }[t.state];
+
+    return '<div class="lane' + mod + '" data-track="' + t.id + '">' +
+      '<button class="lane__head" aria-expanded="' + open + '">' +
+        '<span class="lane__caret" aria-hidden="true">▶</span>' +
+        '<span class="lane__name">' + U.esc(t.name) +
+          '<div class="meta" style="font-weight:500">' + U.esc(t.summary) + "</div>" +
+        "</span>" +
+        '<span class="chip chip--' + chipCls + '">' + (chipCls === "risk" ? "▲ " : "") + chip + "</span>" +
+      "</button>" +
+      strip(t) +
+      '<div class="lane__body" ' + (open ? "" : 'hidden') + ">" +
+        t.stages.map(function (s) {
+          return '<div class="stage stage--' + s.state + '">' +
+            '<i class="stage__pip stage__pip--' + s.state + '"></i>' +
+            "<div><div class=\"stage__n\">" + U.esc(s.name) + "</div>" +
+            '<div class="stage__who">' + U.esc(s.who) + "</div>" +
+            '<div class="stage__m">' + U.esc(s.note) + "</div></div>" +
+          "</div>";
+        }).join("") +
+        t.deps.map(function (d) {
+          return '<div class="dep' + (d.critical ? " dep--critical" : "") + '">' +
+            (d.critical ? "▲ " : "") + U.esc(d.text) + "</div>";
+        }).join("") +
+        (t.gate ? gateCard(t.gate) : "") +
+      "</div>" +
+    "</div>";
+  }).join("");
+
+  /* Expanding one collapses the others. */
+  document.getElementById("tracks").addEventListener("click", function (e) {
+    var head = e.target.closest(".lane__head");
+    if (!head) return;
+    var lane = head.closest(".lane");
+    var wasOpen = head.getAttribute("aria-expanded") === "true";
+    document.querySelectorAll("#tracks .lane").forEach(function (l) {
+      l.querySelector(".lane__head").setAttribute("aria-expanded", "false");
+      l.querySelector(".lane__body").hidden = true;
+    });
+    if (!wasOpen) {
+      head.setAttribute("aria-expanded", "true");
+      lane.querySelector(".lane__body").hidden = false;
+    }
+  });
+
+  /* ---- Files: aggregated to initiative level, context preserved ---- */
+  var slug = K.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  var files = isHero
+    ? [
+        { n: "mango-kulfi-750-artwork-v3.pdf", m: "Packaging · Artwork Approval rev 3 · rejected 6 Aug", s: "bad" },
+        { n: "mango-kulfi-750-artwork-v2.pdf", m: "Packaging · Artwork Approval rev 2 · rejected 30 Jul", s: "bad" },
+        { n: "mango-kulfi-750-artwork-v1.pdf", m: "Packaging · Artwork Approval rev 1 · rejected 22 Jul", s: "bad" },
+        { n: "recipe-signoff-approved.pdf",    m: "Recipe · Recipe sign-off · approved 4 Aug", s: "good" },
+        { n: "structural-spec-final.pdf",      m: "Packaging · Structural spec · approved 18 Jul", s: "good" },
+        { n: "laminate-quote-comparison.xlsx", m: "Procurement · Laminate sourcing · uploaded 9 Aug", s: "" }
+      ]
+    : K.tracks.reduce(function (acc, t) {
+        t.stages.forEach(function (s) {
+          if (s.state === "done") {
+            acc.push({ n: slug + "-" + s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".pdf",
+                       m: t.name + " · " + s.name + " · approved", s: "good" });
+          }
+        });
+        return acc;
+      }, []);
+
+  if (!files.length) {
+    document.getElementById("files").innerHTML =
+      '<div class="glass-faint" style="padding:var(--s5);border-radius:var(--r-md);text-align:center">' +
+      '<p class="meta" style="margin:0">No approved artefacts yet. Files appear here as gates are passed.</p></div>';
+  } else
+  document.getElementById("files").innerHTML = files.map(function (f) {
+    var cls = f.s === "bad" ? "glass" : "glass-faint";
+    var ic = f.s === "bad" ? "▲" : (f.s === "good" ? "✓" : "◫");
+    var col = f.s === "bad" ? "var(--risk)" : (f.s === "good" ? "var(--healthy)" : "var(--ink-3)");
+    return '<div class="' + cls + ' file">' +
+      '<span class="file__ic" style="color:' + col + '">' + ic + "</span>" +
+      '<span style="min-width:0"><span class="file__n">' + U.esc(f.n) + "</span>" +
+      '<div class="file__m">' + U.esc(f.m) + "</div></span></div>";
+  }).join("");
+
+  /* Back goes where you actually came from — My Work and Blockers both reach
+     this screen now, so a hardcoded return to Portfolio would be a dead end. */
+  document.getElementById("back").addEventListener("click", function (e) {
+    if (document.referrer && history.length > 1) { e.preventDefault(); history.back(); }
+  });
+
+  /* ---- Tabs ---- */
+  var tabs = [].slice.call(document.querySelectorAll(".tab"));
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () {
+      tabs.forEach(function (x) { x.setAttribute("aria-selected", String(x === t)); });
+      document.querySelectorAll(".panel").forEach(function (p) {
+        p.setAttribute("data-active", String(p.id === "p-" + t.dataset.panel));
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

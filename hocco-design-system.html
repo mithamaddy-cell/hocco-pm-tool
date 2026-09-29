@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design System — Hocco PM v0.4</title>
+<script src="hocco-theme.js?v=12"></script>
+<link rel="stylesheet" href="hocco-tokens.css?v=12">
+<style>
+  .doc { max-width: 880px; margin: 0 auto; padding: var(--s8) var(--s5) var(--s10); }
+  .doc .frame { max-width: none; }
+
+  .hero { padding: var(--s8) var(--s6); border-radius: var(--r-xl); margin-bottom: var(--s10); }
+  .hero h1 { font-size: 36px; font-weight: 740; letter-spacing: -0.04em; margin: 0 0 var(--s3); line-height: 1.08; }
+  .hero p { font-size: 16px; color: var(--ink-2); margin: 0; max-width: 60ch; line-height: 1.55; }
+  .hero p.eyebrow { font-size: 11px; color: var(--raspberry-deep); }  /* deck label, not body */
+
+  section.doc-s { margin-bottom: var(--s10); }
+  /* Section titles carry the same indigo accent bar as the app screens. */
+  .doc-s > h2 { font-size: 22px; font-weight: 760; letter-spacing: -0.025em; text-transform: none;
+                color: var(--ink); margin: 0 0 var(--s5); padding-bottom: var(--s3);
+                border-bottom: 2px solid var(--indigo-wash);
+                display: flex; align-items: center; gap: 12px; }
+  .doc-s > h2::before { content: ""; flex: none; width: 5px; height: 24px;
+                        border-radius: var(--r-pill); background: var(--indigo); }
+  .doc-s > h2 .n { font-size: 13px; font-weight: 800; color: var(--indigo);
+                   background: var(--indigo-wash); border-radius: var(--r-pill);
+                   padding: 3px 10px; letter-spacing: 0.02em; }
+  .doc-s h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; margin: var(--s6) 0 var(--s3); }
+  .doc-s p  { font-size: 14.5px; color: var(--ink-2); line-height: 1.6; max-width: 68ch; margin: 0 0 var(--s3); }
+  .doc-s p b { color: var(--ink); }
+
+  .grid { display: grid; gap: var(--s3); grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+
+  .sw { border-radius: var(--r-md); overflow: hidden; border: 1px solid var(--edge); }
+  .sw__chip { height: 68px; }
+  .sw__b { padding: var(--s3); background: var(--glass); }
+  .sw__n { font-size: 13px; font-weight: 680; }
+  .sw__h { font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .sw__r { font-size: 11.5px; color: var(--ink-2); margin-top: 4px; line-height: 1.4; }
+
+  .demo { padding: var(--s5); border-radius: var(--r-lg); margin-bottom: var(--s4); }
+  .note { font-size: 13px; color: var(--ink-3); margin-top: var(--s3); line-height: 1.5; max-width: 66ch; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: var(--s3); border-bottom: 1px solid var(--edge); vertical-align: top; }
+  th { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); font-weight: 750; }
+  td b { font-weight: 680; }
+  .tblwrap { overflow-x: auto; }
+
+  .links { display: flex; gap: var(--s3); flex-wrap: wrap; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px;
+         background: var(--glass-faint); border: 1px solid var(--edge);
+         padding: 1px 6px; border-radius: 5px; }
+
+  .callout { padding: var(--s4) var(--s5); border-radius: var(--r-md);
+             border-left: 4px solid var(--raspberry-deep); background: var(--glass-faint);
+             margin: var(--s4) 0; }
+  .callout p { margin: 0; }
+
+  .phoneview { max-width: 390px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="ground" aria-hidden="true"></div>
+
+<div class="doc">
+
+  <div class="glass-strong hero">
+    <p class="eyebrow" style="margin-bottom:var(--s3)">Hocco PM Tool · Design System v0.4</p>
+    <h1>Glass carries structure.<br>Solid carries consequence.</h1>
+    <p>
+      A glassmorphic reworking of the visual system in §8 of the product spec. The colour
+      <i>roles</i> survive unchanged — they were reasoned from user conditioning, not from
+      style. What changes is the material: surfaces became translucent and layered, and one
+      hard rule was added to keep that safe.
+    </p>
+    <div class="links" style="margin-top:var(--s6)">
+      <a class="btn btn--primary" href="hocco-portfolio-mobile.html">Portfolio</a>
+      <a class="btn btn--ghost" href="hocco-mywork-mobile.html">My Work</a>
+      <a class="btn btn--ghost" href="hocco-blockers-mobile.html">Blockers</a>
+      <a class="btn btn--ghost" href="hocco-initiative-detail.html?id=mango-kulfi">Initiative Detail</a>
+      <a class="btn btn--ghost" href="hocco-new-initiative.html">New Initiative</a>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">01</span>The governing rule</h2>
+    <p>
+      Glassmorphism has one structural conflict with this product. §8 requires that
+      <b>risk is never carried by colour alone</b> — the signal must survive greyscale, colour-vision
+      deficiency, and a cheap monitor. But a translucent surface takes its final colour from
+      whatever happens to be behind it. Saturation drops, contrast becomes unpredictable, and
+      the exact thing the spec asks to be reliable becomes the thing that varies most.
+    </p>
+    <div class="callout">
+      <p><b>So: glass is for structure, never for state.</b> Depth, layering, chrome and grouping are
+      glass. Every risk signal — the rail, the chip, the icon, the reason text, every primary
+      action — is rendered on an <b>opaque</b> element. Nothing you need to trust is translucent.</p>
+    </div>
+    <p>
+      Two consequences follow. Primary actions are solid raspberry rather than tinted glass, so
+      an action can never be mistaken for chrome. And every glass surface has an opaque fallback
+      under <code>prefers-reduced-transparency</code> and where <code>backdrop-filter</code> is
+      unsupported — the layouts are identical, only the material changes.
+    </p>
+
+    <h3>Raised means touchable</h3>
+    <p>
+      The second rule, and the one glassmorphism makes easiest to break. Because every surface
+      is made of the same material, a read-only panel and a tappable row can end up visually
+      identical — which is exactly what happened to the first build of the summary strip.
+    </p>
+    <div class="callout">
+      <p><b>Lift is an affordance, not decoration.</b> If a surface is raised — outer shadow, lit
+      top edge, its own rounded pane — it must do something when touched. Read-only surfaces are
+      <b>inset</b> instead: recessed, no shadow, no gaps, hairline dividers, one continuous object.</p>
+    </div>
+    <p>
+      So the summary strip is a single carved well rather than three floating cards, and
+      <code>cursor: pointer</code> plus the press animation are scoped to
+      <code>a.row</code>, <code>button.row</code> and <code>[role="button"].row</code> — a static
+      row keeps its tier styling but makes no promise it can't keep.
+    </p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">02</span>What changed from §8</h2>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th style="width:22%">Decision</th><th style="width:39%">Spec §8</th><th style="width:39%">v0.4</th></tr></thead>
+        <tbody>
+          <tr><td><b>Material</b></td><td>Near-flat, restrained elevation; warm neutral fills</td><td>Layered translucent glass over a fixed gradient ground; light, not shadow, carries depth</td></tr>
+          <tr><td><b>Colour roles</b></td><td>Raspberry action · Indigo structure · Amber risk</td><td><b>Unchanged.</b> The reasoning was about learned association, which the restyle does not touch</td></tr>
+          <tr><td><b>Colour values</b></td><td>Amber <code>#E08A1E</code>, green <code>#6BAE86</code></td><td>Deepened to <code>#A34E06</code> / <code>#3F8460</code> — glass washes out chroma, so these need headroom</td></tr>
+          <tr><td><b>Tiers</b></td><td>Contrast + weight + muting</td><td><b>Also depth.</b> Recede / Present / Surface are three glass depths as well as three type weights</td></tr>
+          <tr><td><b>Type</b></td><td>Inter for UI, Baloo 2 for headlines</td><td>Inter only. With glass doing the decorative work, a rounded display face pushes the tool back toward the playful register §8 rejects</td></tr>
+          <tr><td><b>Elevation</b></td><td>Near-flat, shadows avoided</td><td>Restrained but present — glass needs a shadow to read as a pane rather than a stain. Lift is now load-bearing: raised = touchable, inset = read-only</td></tr>
+          <tr><td><b>Dark mode</b></td><td>Not specified</td><td>Supported. Glass is at its most legible on a dark ground, and reps are on phones at night</td></tr>
+          <tr><td><b>Section titles</b></td><td>Micro-caption: 11px uppercase, tracked, grey</td><td>A real header: 17px/760, sentence case, full ink, indigo accent bar — a clear step above the 15px row title. The caption version survives only for field labels</td></tr>
+          <tr><td><b>Brand presence</b></td><td>“Punctuation” — largely the logo and the primary button</td><td>Structural. Indigo now voices section bars, counts, tabs, initiative labels and app-bar titles; a raspberry→indigo hairline runs under every app bar. Indigo <i>is</i> the structure colour, so this adds brand without touching the risk register</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">03</span>Colour</h2>
+    <p>The three system colours still occupy three visibly separate zones of the wheel — the
+    structural guarantee that a tired user cannot confuse an action with a warning.</p>
+    <div class="grid" id="swatches"></div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">04</span>The three-tier attention model</h2>
+    <p>Every element belongs to exactly one tier. The tokens make tiers <i>feel</i> different —
+    now through depth as well as contrast. A calm screen means a healthy company.</p>
+
+    <div class="glass demo phoneview">
+      <div class="row row--recede">
+        <div class="row__head"><span class="row__title">Kesar Pista 1L</span><span class="row__label">NPD</span></div>
+        <div class="row__reason">All four tracks progressing</div>
+        <div class="row__foot"><span class="chip chip--ok">On track</span><span class="chip chip--brand-a">Brand A</span></div>
+      </div>
+      <div class="row row--present">
+        <div class="row__head"><span class="row__title">Sitaphal FOM</span><span class="row__label">Campaign</span></div>
+        <div class="row__reason">Campaign brief in progress · due 18 Aug</div>
+        <div class="row__foot"><span class="chip chip--pending">In progress</span><span class="chip chip--brand-b">Brand B</span></div>
+      </div>
+      <div class="row row--surface">
+        <div class="row__head"><span class="row__title">Mango Kulfi 750ml</span><span class="row__label">NPD</span></div>
+        <div class="row__reason"><span class="ico">▲</span><span>3rd revision, 2× same reason at Artwork Approval</span></div>
+        <div class="row__foot"><span class="chip chip--risk">▲ Blocked</span><span class="chip chip--brand-a">Brand A</span></div>
+      </div>
+    </div>
+
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>Tier</th><th>Used for</th><th>Glass</th><th>Type</th><th>Opaque parts</th></tr></thead>
+        <tbody>
+          <tr><td><b>Recede</b></td><td>Healthy, done, upcoming</td><td>34% fill, no border, no shadow, light blur</td><td>Regular, ink-2</td><td>—</td></tr>
+          <tr><td><b>Present</b></td><td>Working, actionable, waiting</td><td>62% fill, hairline, lit top edge, soft lift</td><td>Semibold, full ink</td><td>State chip</td></tr>
+          <tr><td><b>Surface</b></td><td>At risk, blocked, disputed, overdue</td><td>82% fill, stronger edge, heavy blur, amber-cast lift</td><td>Bold, full ink</td><td><b>Rail, icon, chip, reason text</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Greyscale test: desaturate the block above and the third row is still
+    unmistakably the troubled one — heavier type, a 4px solid rail, a filled chip, a ▲ glyph,
+    and the word “Blocked”. Five signals, none of them colour-dependent.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">05</span>The Row</h2>
+    <p>The atom. It appears in My Work, Portfolio, Blockers and inside initiatives. Its variants
+    <i>are</i> the tiers. <b>Reason text never truncates at any breakpoint</b> — a row that says
+    “stale 14 days” and then clips is worse than a row that says nothing, because it implies the
+    tool knows something it won’t tell you.</p>
+    <div class="glass demo phoneview">
+      <div class="row row--surface">
+        <div class="row__head"><span class="row__title">Festive Gift Pack</span><span class="row__label">Packaging</span></div>
+        <div class="row__reason"><span class="ico">▲</span><span>Blocked 9 days at Procurement, unacknowledged — auto-escalates to both HODs tomorrow</span></div>
+        <div class="row__foot"><span class="chip chip--risk">▲ Disputed</span><span class="chip chip--brand-b">Brand B</span><span class="meta" style="margin-left:auto">Launch 28 Aug</span></div>
+      </div>
+    </div>
+    <p class="note">Wrapping to three lines is the correct behaviour, not a layout failure.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">06</span>The Track Lane</h2>
+    <p>A collapsed parallel track with gate markers and on-demand dependencies — the answer to
+    the unreadable-diagram problem. Segments are stages; diamonds are gates; a superscript on a
+    gate is its revision count. Dependencies are hidden at rest, <b>except</b> the critical
+    dependency of a blocked stage, which shows by default. Troubled things surface their own
+    diagnosis.</p>
+
+    <div class="glass demo phoneview">
+      <div class="lane lane--blocked">
+        <div class="lane__head"><span class="lane__caret">▶</span>
+          <span class="lane__name">Packaging<div class="meta" style="font-weight:500">Stuck at Artwork Approval · 3rd revision</div></span>
+          <span class="chip chip--risk">▲ Blocked</span>
+        </div>
+        <div class="lane__strip">
+          <i class="seg seg--done"></i><i class="seg seg--done"></i>
+          <span class="gate gate--passed"><i class="gate__mark"></i></span>
+          <i class="seg seg--blocked"></i>
+          <span class="gate gate--failed"><i class="gate__mark"></i><span class="gate__rev num">3</span></span>
+          <i class="seg"></i>
+        </div>
+        <div class="lane__body">
+          <div class="dep dep--critical">▲ Blocks → Codes/BOM cannot finalise pack codes until artwork is approved. 6 days lost so far.</div>
+        </div>
+      </div>
+      <div class="lane lane--done">
+        <div class="lane__head"><span class="lane__caret">▶</span>
+          <span class="lane__name">Recipe<div class="meta" style="font-weight:500">5 of 5 complete · signed off 4 Aug</div></span>
+          <span class="chip chip--ok">On track</span>
+        </div>
+        <div class="lane__strip">
+          <i class="seg seg--done"></i><i class="seg seg--done"></i>
+          <span class="gate gate--passed"><i class="gate__mark"></i></span>
+          <i class="seg seg--done"></i><i class="seg seg--done"></i>
+          <span class="gate gate--passed"><i class="gate__mark"></i></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">07</span>State chips</h2>
+    <p>Always opaque, always carrying a word. <b>Chips are labels, never controls.</b> They were
+    outlined pills — the universal shape of a button or a dismissible filter chip — which invited
+    taps they can't honour. They are now flat tags: 5px radius against the button's 14px, tinted
+    fill instead of an outline, no shadow and no press state. The tappable thing is the row
+    around them.</p>
+    <div style="display:flex;gap:var(--s2);flex-wrap:wrap">
+      <span class="chip chip--risk">▲ Blocked</span>
+      <span class="chip chip--risk">▲ Stale</span>
+      <span class="chip chip--risk">▲ Disputed</span>
+      <span class="chip chip--pending">Awaiting</span>
+      <span class="chip chip--wait">Waiting</span>
+      <span class="chip chip--queued">Queued</span>
+      <span class="chip chip--ok">On track</span>
+      <span class="chip chip--news">Launched</span>
+      <span class="chip chip--brand-a">Brand A</span>
+      <span class="chip chip--brand-b">Brand B</span>
+    </div>
+    <p class="note" style="margin-bottom:var(--s4)">Three visibly separate classes of thing, so an
+    affordance is never ambiguous: a flat tag is a <b>label</b>, an inline raspberry link is
+    <b>navigation</b>, a solid raspberry pill is an <b>action</b>.</p>
+    <div style="display:flex;gap:var(--s4);flex-wrap:wrap;align-items:center">
+      <span class="chip chip--init">Mango Kulfi 750ml</span>
+      <a class="rowlink" style="margin:0" href="hocco-initiative-detail.html?id=mango-kulfi">View initiative →</a>
+      <button class="btn btn--primary">Raise blocker</button>
+    </div>
+    <p class="note"><b>Queued is not Blocked.</b> Queued means the owning department is working
+    through other things — contention, not failure. Conflating them sends leadership chasing the
+    wrong fix, so they never share a colour or a shape.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">08</span>Actions</h2>
+    <p>Primary actions are solid. This is the one place where refusing glass is a usability
+    decision rather than an accessibility one: a translucent button sits in the same visual
+    register as chrome, and the most important interaction in the product — flagging a blocker —
+    cannot be allowed to look like furniture.</p>
+    <div style="display:flex;gap:var(--s3);flex-wrap:wrap;align-items:center">
+      <button class="btn btn--primary">Raise blocker</button>
+      <button class="btn btn--ghost">Cancel</button>
+      <button class="btn btn--risk">Acknowledge</button>
+    </div>
+    <p class="note">Ghost buttons <i>are</i> glass — they are secondary by design, and reading as
+    chrome is the point.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">09</span>Tokens</h2>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th>Group</th><th>Token</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="3"><b>Glass</b></td><td><code>--glass-faint</code></td><td>white 34% · blur 10px sat 150% — Recede</td></tr>
+          <tr><td><code>--glass</code></td><td>white 62% · blur 20px sat 180% — Present</td></tr>
+          <tr><td><code>--glass-strong</code></td><td>white 82% · blur 32px sat 190% — Surface</td></tr>
+          <tr><td rowspan="2"><b>Chrome</b></td><td><code>--glass-chrome</code></td><td>72% — appbar and bottom nav; content scrolls under</td></tr>
+          <tr><td><code>--glass-sheet</code></td><td>88% — bottom sheet; heavier so the list behind stays readable</td></tr>
+          <tr><td><b>Edges</b></td><td><code>--edge-lit</code></td><td>white 90% top hairline — most of what reads as “glass”</td></tr>
+          <tr><td><b>Spacing</b></td><td><code>--s1 … --s10</code></td><td>Base 8. Dense triage rows, airy detail screens</td></tr>
+          <tr><td><b>Radius</b></td><td><code>--r-sm … --r-xl</code></td><td>8 / 14 / 20 / 28px — warmth, not a disciplinary instrument</td></tr>
+          <tr><td><b>Touch</b></td><td><code>--touch</code></td><td>44px, hard token</td></tr>
+          <tr><td><b>Canvas</b></td><td><code>--frame</code></td><td>390px primary; stress-tested at 360px</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">10</span>Motion</h2>
+    <p>Spent only where it means something. Two moments earn it:</p>
+    <p><b>The Done settle</b> — a completed row dims and gains an Undo rather than vanishing.
+    A claim of completion is not closure.</p>
+    <p><b>The unblock transition</b> — the highest-value moment in the product, the one that beats
+    the spreadsheet. A Zone-2 row becoming actionable lifts and gains a green rail, carrying a
+    brief trace of the wait. Prominent, never modal.</p>
+    <div class="glass demo phoneview">
+      <div class="row row--present row--unblocked" id="ub">
+        <div class="row__head"><span class="row__title">Pack copy statutory sign-off</span></div>
+        <div class="row__reason">Unblocked after 6 days — QC signed off just now</div>
+        <div class="row__foot"><span class="chip chip--news">Ready for you</span></div>
+      </div>
+    </div>
+    <button class="btn btn--ghost" id="replay">Replay the unblock</button>
+    <p class="note">Everything else is quick and unremarkable. Under
+    <code>prefers-reduced-motion</code> both collapse to instant state changes — the Undo and the
+    green rail still do the work.</p>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">11</span>Accessibility ledger</h2>
+    <div class="tblwrap">
+      <table>
+        <thead><tr><th style="width:30%">Risk</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>Translucency lowers text contrast unpredictably</td><td>Body text sits on ≥62% fills over a controlled low-chroma ground; risk text is full ink at 620 weight, never a tinted colour</td></tr>
+          <tr><td>≈8% of men have colour-vision deficiency; the user base skews male</td><td>Risk = colour <i>and</i> weight <i>and</i> a ▲ glyph <i>and</i> a solid rail <i>and</i> the word. Five carriers, four non-chromatic</td></tr>
+          <tr><td><code>backdrop-filter</code> unsupported</td><td><code>@supports</code> fallback swaps every glass surface to an opaque equivalent; layout unchanged</td></tr>
+          <tr><td>User has reduced transparency enabled</td><td><code>prefers-reduced-transparency</code> removes the gradient ground and all blur</td></tr>
+          <tr><td>Vestibular sensitivity</td><td><code>prefers-reduced-motion</code> reduces all durations to 0.01ms</td></tr>
+          <tr><td>Blur is GPU-expensive on low-end Android</td><td>Blur is confined to chrome, sheets, and row surfaces — not applied per list item at Recede tier, which is where the row count is highest</td></tr>
+          <tr><td>Thumb reach on 390px</td><td>Status change is a bottom sheet, never a top popover; all targets ≥44×44px</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">12</span>Filtering &amp; launch-health</h2>
+    <p>One filter component (<code>UI.filters</code>) serves every list screen — My Work, Portfolio,
+    Blockers. A trigger opens a thumb-zone bottom sheet with three single-select facets — brand,
+    category, priority — that apply <b>live</b> as you tap. Active facets appear as removable pills
+    in the bar. The trigger, pills and options all wear the <b>outlined-pill control shape</b>, never
+    the flat tag shape — filtering is an action, so it must look like one.</p>
+    <div style="display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center;margin-bottom:var(--s4)">
+      <span class="filterbtn"><span aria-hidden="true">⇅</span> Filter <span class="filterbtn__n">2</span></span>
+      <span class="filterpill">Brand B <span aria-hidden="true">×</span></span>
+      <span class="filterpill">NPD <span aria-hidden="true">×</span></span>
+    </div>
+    <p><b>Priority</b> is the CEO's computed ordering from launch date (spec §5), so the facet's
+    values are High / Medium / Low — plus <b>Awaiting</b> for the unprioritised, which have no
+    priority yet by design.</p>
+
+    <h3>Calendar launch-health</h3>
+    <p>Every launch on the Calendar carries a three-way status — <b>on track / delayed / blocked</b> —
+    that must not collapse into one dot. It's a coloured rail <i>and</i> an iconned label, so the
+    signal survives greyscale; blocked is a solid fill while the others are tinted, so fill weight
+    separates them before hue does. In dark mode the palette's two ambers sit too close, so the
+    Calendar widens the gap itself — gold for delayed, burnt orange for blocked — driven from the
+    shared <code>--launch-*</code> tokens the rails, chips and legend all read from.</p>
+    <div style="display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s3)">
+      <span class="cal__status cal__status--ontrack">✓ On track</span>
+      <span class="cal__status cal__status--delayed">▲ Delayed</span>
+      <span class="cal__status cal__status--blocked">▲ Blocked</span>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="doc-s">
+    <h2><span class="n">13</span>Open</h2>
+    <p><b>Untested.</b> The glass ground is calibrated on a good screen. It needs checking on the
+    cheap Android handsets the reps actually carry, in a factory in daylight — that is the real
+    contrast test, not a simulator. If it fails there, the fallback path already exists: force the
+    opaque token set and nothing else changes.</p>
+    <p><b>Also unresolved from §10 of the spec:</b> whether Portfolio should lead with at-risk cards
+    or a tighter summary line. Both are on the Portfolio screen now — the strip sits above the
+    band — so the first testing round can settle it rather than the armchair.</p>
+  </section>
+
+</div>
+
+<script src="hocco-ui.js?v=12"></script>
+<script>
+(function () {
+  var U = window.UI;
+  var swatches = [
+    ["Raspberry",   "#D43450", "var(--raspberry)",   "Primary action. Users already read it as “click” — use the instinct."],
+    ["Indigo",      "#383084", "var(--indigo)",      "Structure, brand, Present tier. Calm structural voice."],
+    ["Burnt amber", "#A34E06", "var(--risk)",        "Risk. Solid fills only — rails, chips, icons."],
+    ["Amber",       "#C77A10", "var(--risk-bright)", "Risk, lighter weight. Rails and glyphs."],
+    ["Slate",       "#4A5578", "var(--wait)",        "Waiting / queued. Off all axes — waiting is not failure."],
+    ["Muted green", "#3F8460", "var(--healthy)",     "Healthy, done. Quiet, settled."],
+    ["Bright green","#16855B", "var(--news)",        "Good news. Clear of amber; conventional “go”."],
+    ["Teal",        "#1F6B6A", "var(--brand-a)",     "Brand A tag. Always paired with a text label."],
+    ["Ochre",       "#8A5A10", "var(--brand-b)",     "Brand B tag. Always paired with a text label."]
+  ];
+  document.getElementById("swatches").innerHTML = swatches.map(function (s) {
+    return '<div class="sw"><div class="sw__chip" style="background:' + s[2] + '"></div>' +
+      '<div class="sw__b"><div class="sw__n">' + s[0] + "</div>" +
+      '<div class="sw__h">' + s[1] + "</div>" +
+      '<div class="sw__r">' + U.esc(s[3]) + "</div></div></div>";
+  }).join("");
+
+  document.getElementById("replay").addEventListener("click", function () {
+    var r = document.getElementById("ub");
+    r.classList.remove("row--unblocked");
+    void r.offsetWidth;
+    r.classList.add("row--unblocked");
+  });
+})();
+</script>
+</body>
+</html>

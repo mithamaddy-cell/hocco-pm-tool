@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My Work — Hocco PM</title>
+<script src="hocco-theme.js?v=12"></script>
+<link rel="stylesheet" href="hocco-tokens.css?v=12">
+<style>
+  .avatar {
+    width: var(--touch); height: var(--touch); border-radius: var(--r-pill);
+    background: var(--indigo); color: #fff; display: grid; place-items: center;
+    font-size: 13px; font-weight: 720; letter-spacing: 0.02em; flex: none;
+    text-decoration: none;
+  }
+  /* Zone 2 rows name WHO and HOW LONG — a blocked item must read as
+     "waiting on Procurement", not as this rep's overdue failure. */
+  .waitline { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 620; }
+  .waitline .who { color: var(--wait); }
+  .row--surface .waitline .who { color: var(--risk); }
+  .waitline .days {
+    margin-left: auto; font-size: 12px; font-weight: 700; color: var(--ink-3);
+  }
+  .zonehint { font-size: 12.5px; color: var(--ink-3); margin: -4px 0 var(--s3); padding: 0 var(--s1); }
+
+  details.upcoming > summary {
+    list-style: none; cursor: pointer; min-height: var(--touch);
+    display: flex; align-items: center; gap: var(--s2); padding: 0 2px;
+  }
+  details.upcoming > summary::-webkit-details-marker { display: none; }
+  details.upcoming > summary .caret {
+    color: var(--indigo); font-size: 12px; margin-left: auto;
+    transition: transform 180ms var(--ease);
+  }
+  details.upcoming[open] > summary .caret { transform: rotate(90deg); }
+
+  .sheet__ctx { font-size: 12.5px; color: var(--ink-3); margin: 0 0 var(--s4); }
+  .sheet__h { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 2px; }
+  .step { display: none; } .step[data-active="true"] { display: block; }
+  .field { width: 100%; font: inherit; font-size: 14.5px; color: var(--ink);
+           background: var(--glass-faint); border: 1px solid var(--edge-strong);
+           border-radius: var(--r-md); padding: var(--s3); min-height: 76px; resize: vertical; }
+  .field::placeholder { color: var(--ink-3); }
+</style>
+</head>
+<body>
+<div class="ground" aria-hidden="true"></div>
+
+<header class="appbar">
+  <div style="flex:1;min-width:0">
+    <h1 class="appbar__title">My Work</h1>
+    <div class="appbar__sub" id="sub"></div>
+  </div>
+  <a class="iconbtn" href="#" aria-label="Notifications">◔<span class="iconbtn__dot"></span></a>
+  <a class="avatar" href="#" id="avatar" aria-label="Account menu"></a>
+</header>
+
+<main class="frame screen">
+
+  <!-- Always-visible summary strip. Mitigates §10's risk that Zone 2 falls
+       below the fold behind full-weight Zone 1 cards. -->
+  <div class="strip" id="strip"></div>
+
+  <!-- Filter by the parent initiative's brand / category / priority. -->
+  <div class="filterbar" id="filter-mw"></div>
+
+  <section class="section">
+    <div class="section__head">
+      <p class="eyebrow">Needs you now</p>
+      <span class="count num" id="c1"></span>
+    </div>
+    <p class="zonehint">Ranked by launch date. Tap a row to change status.</p>
+    <div id="zone1"></div>
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <p class="eyebrow">Waiting on others</p>
+      <span class="count num" id="c2"></span>
+    </div>
+    <p class="zonehint">Not your delay. Each row names who it sits with, and for how long.</p>
+    <div id="zone2"></div>
+  </section>
+
+  <details class="upcoming section">
+    <summary class="section__head">
+      <span class="eyebrow">Upcoming</span>
+      <span class="count num" id="c3"></span>
+      <span class="caret" aria-hidden="true">▶</span>
+    </summary>
+    <div id="zone3" style="margin-top:var(--s3)"></div>
+  </details>
+
+  <hr class="divider">
+  <p class="meta" style="text-align:center">
+    Nothing here is a scoreboard. Status you give is used to explain delay, not to rank people.
+  </p>
+
+</main>
+
+<div id="nav"></div>
+
+<!-- ===================== STATUS / BLOCKER BOTTOM SHEET =====================
+     The make-or-break interaction (spec §7). One tap from the row, thumb zone,
+     no navigation for the common case. Raising a blocker is deliberately the
+     same two taps as marking Done — the honest action must be the cheapest. -->
+<div class="scrim" id="sheet-scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" aria-hidden="true" data-open="false">
+  <div class="sheet__grip" aria-hidden="true"></div>
+
+  <!-- Step 1: pick a status -->
+  <div class="step" data-active="true" id="step-status">
+    <h2 class="sheet__h" id="sheet-title">Update status</h2>
+    <p class="sheet__ctx" id="sheet-ctx"></p>
+    <button class="sheet__opt" data-status="progress">
+      <i class="dot" style="background:var(--indigo)"></i>
+      <span>In progress<small>Still working on it</small></span>
+    </button>
+    <button class="sheet__opt" data-status="done">
+      <i class="dot" style="background:var(--healthy)"></i>
+      <span>Done<small>Stays undoable until the stage is genuinely closed</small></span>
+    </button>
+    <button class="sheet__opt" data-status="blocked">
+      <i class="dot" style="background:var(--risk)"></i>
+      <span>Blocked…<small>Say who it’s stuck with. Two taps.</small></span>
+    </button>
+    <a class="btn btn--ghost btn--block" style="margin-top:var(--s2)" id="view-init">View initiative →</a>
+    <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close>Cancel</button>
+  </div>
+
+  <!-- Step 2: who is it stuck with -->
+  <div class="step" id="step-who">
+    <h2 class="sheet__h">Who is it stuck with?</h2>
+    <p class="sheet__ctx">A blocker is a claim until they acknowledge it. Both HODs can see it.</p>
+    <div id="who-opts"></div>
+    <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-back="status">Back</button>
+  </div>
+
+  <!-- Step 3: reason from a controlled picklist (fast, or nobody gives one) -->
+  <div class="step" id="step-why">
+    <h2 class="sheet__h">Why?</h2>
+    <p class="sheet__ctx" id="why-ctx"></p>
+    <div id="why-opts"></div>
+    <label class="meta" style="display:block;margin:var(--s3) 0 var(--s2)">Anything to add? (optional)</label>
+    <textarea class="field" id="why-note" placeholder="e.g. vendor mockup came back wrong twice"></textarea>
+    <button class="btn btn--primary btn--block" style="margin-top:var(--s3)" id="raise">Raise blocker</button>
+    <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-back="who">Back</button>
+  </div>
+</div>
+
+<script src="hocco-data.js?v=12"></script>
+<script src="hocco-ui.js?v=12"></script>
+<script>
+(function () {
+  var D = window.HOCCO, U = window.UI, W = D.myWork;
+
+  document.getElementById("sub").textContent = D.me.name + " · " + D.me.dept;
+  document.getElementById("avatar").textContent = D.me.initials;
+  document.getElementById("nav").innerHTML = U.bottomNav("mywork", 1);
+
+  document.getElementById("strip").innerHTML =
+    '<div class="strip__cell"><div class="strip__n num">' + W.now.length + '</div><div class="strip__l">NEEDS YOU</div></div>' +
+    '<div class="strip__cell strip__cell--wait"><div class="strip__n num">' + W.waiting.length + '</div><div class="strip__l">WAITING</div></div>' +
+    '<div class="strip__cell strip__cell--risk"><div class="strip__n num">1</div><div class="strip__l">DISPUTED</div></div>';
+
+  /* A task's filterable attributes come from its parent initiative. */
+  function initOf(t) { return D.byId[t.init_id] || D.byName[t.initiative] || null; }
+  function keep(matchFn) { return function (t) { return matchFn(initOf(t)); }; }
+
+  function empty(label) { return '<div class="emptyfilter">No ' + label + " match the filter.</div>"; }
+
+  /* ---- Zone 1: actionable. Initiative is a label on the row (grouping by
+     initiative only kicks in past ~6 rows, spec §7). ---- */
+  function renderZone1(matchFn) {
+    var list = W.now.filter(keep(matchFn));
+    document.getElementById("c1").textContent = list.length;
+    document.getElementById("zone1").innerHTML = list.length ? list.map(function (s) {
+      var icon = s.tier === "surface" ? '<span class="ico" aria-hidden="true">▲</span>' : "";
+      return '<div class="row row--' + s.tier + '" data-stage="' + s.id + '" data-title="' + U.esc(s.title) +
+             '" data-init="' + U.esc(s.initiative) + '" data-initid="' + U.esc(s.init_id) +
+             '" role="button" tabindex="0">' +
+        '<div class="row__head">' +
+          '<span class="row__title">' + U.esc(s.title) + "</span>" +
+          '<span class="row__label">' + U.esc(s.due) + "</span>" +
+        "</div>" +
+        (s.reason ? '<div class="row__reason">' + icon + "<span>" + U.esc(s.reason) + "</span></div>" : "") +
+        '<div class="row__foot">' +
+          '<span class="chip chip--init">' + U.esc(s.initiative) + "</span>" +
+          s.chips.map(function (c) { return '<span class="chip chip--' + c[0] + '">' + U.esc(c[1]) + "</span>"; }).join("") +
+          (s.stale ? '<span class="meta" style="margin-left:auto">' + U.esc(s.stale) + "</span>" : "") +
+        "</div>" +
+      "</div>";
+    }).join("") : empty("tasks");
+  }
+
+  /* ---- Zone 2: the anti-blame zone ---- */
+  function renderZone2(matchFn) {
+    var list = W.waiting.filter(keep(matchFn));
+    document.getElementById("c2").textContent = list.length;
+    document.getElementById("zone2").innerHTML = list.length ? list.map(function (s) {
+      var icon = s.tier === "surface" ? '<span class="ico" aria-hidden="true">▲</span>' : "";
+      /* Zone 2 opens the initiative, not the blockers list — when you're waiting
+         on someone, the question is "where is this stuck", and that lives here. */
+      return '<a class="row row--' + s.tier + '" href="hocco-initiative-detail.html?id=' + encodeURIComponent(s.init_id) + '">' +
+        '<div class="row__head"><span class="row__title">' + U.esc(s.title) + "</span></div>" +
+        '<div class="waitline">' + icon +
+          '<span>Waiting on <span class="who">' + U.esc(s.who) + "</span></span>" +
+          '<span class="days num">' + s.days + " days</span>" +
+        "</div>" +
+        (s.note ? '<div class="row__reason" style="margin-top:6px">' + U.esc(s.note) + "</div>" : "") +
+        '<div class="row__foot"><span class="chip chip--init">' + U.esc(s.initiative) + "</span></div>" +
+      "</a>";
+    }).join("") : empty("items");
+  }
+
+  /* ---- Zone 3: recessive ---- */
+  function renderZone3(matchFn) {
+    var list = W.upcoming.filter(keep(matchFn));
+    document.getElementById("c3").textContent = list.length;
+    document.getElementById("zone3").innerHTML = list.length ? list.map(function (s) {
+      return '<div class="row row--recede">' +
+        '<div class="row__head"><span class="row__title">' + U.esc(s.title) + "</span>" +
+        '<span class="row__label">' + U.esc(s.when) + "</span></div>" +
+        '<div class="row__foot"><span class="chip chip--init">' + U.esc(s.initiative) + "</span></div>" +
+      "</div>";
+    }).join("") : empty("upcoming items");
+  }
+
+  function renderAll(matchFn) { renderZone1(matchFn); renderZone2(matchFn); renderZone3(matchFn); }
+  renderAll(function () { return true; });
+  U.filters(document.getElementById("filter-mw"), renderAll);
+
+  /* ================= Sheet behaviour ================= */
+  var sheet = U.sheet("sheet");
+  var current = null;
+  /* Kept in closure, not on the sheet element — a data-* attribute on the
+     sheet root gets picked up by closest() from every descendant click. */
+  var pickedWho = null, pickedWhy = null;
+
+  function showStep(id) {
+    document.querySelectorAll("#sheet .step").forEach(function (s) {
+      s.setAttribute("data-active", String(s.id === "step-" + id));
+    });
+    sheet.el.scrollTop = 0;
+  }
+
+  /* Open from any Zone 1 row — one tap, no navigation. */
+  document.getElementById("zone1").addEventListener("click", openFromRow);
+  document.getElementById("zone1").addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openFromRow(e); }
+  });
+  function openFromRow(e) {
+    var row = e.target.closest("[data-stage]");
+    if (!row) return;
+    current = row;
+    document.getElementById("sheet-ctx").textContent = row.dataset.title + " · " + row.dataset.init;
+    /* The row itself is the status control (spec §7), so the route to the
+       parent initiative lives in the sheet rather than fighting it for the tap. */
+    document.getElementById("view-init").href =
+      "hocco-initiative-detail.html?id=" + encodeURIComponent(row.dataset.initid || "");
+    showStep("status");
+    sheet.open();
+  }
+
+  sheet.el.addEventListener("click", function (e) {
+    if (e.target.closest("[data-close]")) return sheet.close();
+    var back = e.target.closest("[data-back]");
+    if (back) return showStep(back.dataset.back);
+
+    var opt = e.target.closest("[data-status]");
+    if (opt) return chooseStatus(opt.dataset.status);
+
+    var who = e.target.closest("[data-who]");
+    if (who) {
+      pickedWho = who.dataset.who;
+      pickedWhy = null;
+      document.getElementById("why-ctx").textContent = "Blocked by " + pickedWho + ". Pick the closest reason.";
+      document.querySelectorAll("[data-why]").forEach(function (b) {
+        b.style.borderColor = "var(--edge)";
+        b.style.background = "var(--glass-faint)";
+      });
+      showStep("why");
+      return;
+    }
+    var why = e.target.closest("[data-why]");
+    if (why) {
+      pickedWhy = why.dataset.why;
+      document.querySelectorAll("[data-why]").forEach(function (b) {
+        b.style.borderColor = (b === why) ? "var(--raspberry-deep)" : "var(--edge)";
+        b.style.background  = (b === why) ? "var(--glass-strong)"   : "var(--glass-faint)";
+      });
+    }
+  });
+
+  function chooseStatus(status) {
+    if (status === "blocked") return showStep("who");
+
+    if (status === "done") {
+      /* Done lingers, dimmed and undoable, until the stage is genuinely
+         closed. A claim of completion is not closure. (spec §7) */
+      current.classList.remove("row--surface", "row--present");
+      current.classList.add("row--recede", "row--settled");
+      var foot = current.querySelector(".row__foot");
+      foot.insertAdjacentHTML("beforeend",
+        '<button class="undo" style="margin-left:auto">Undo</button>');
+      sheet.close();
+      U.toast("Marked done. Stays undoable until the stage closes.");
+      return;
+    }
+
+    current.querySelector(".row__foot").insertAdjacentHTML("afterbegin",
+      '<span class="chip chip--pending">In progress</span>');
+    sheet.close();
+    U.toast("Status updated.");
+  }
+
+  /* Undo — no confirmation dialog for a reversible action. */
+  document.getElementById("zone1").addEventListener("click", function (e) {
+    var u = e.target.closest(".undo");
+    if (!u) return;
+    e.stopPropagation();
+    var row = u.closest(".row");
+    row.classList.remove("row--recede", "row--settled");
+    row.classList.add("row--present");
+    u.remove();
+  });
+
+  /* Departments a blocker can be raised against — the rep's own is excluded. */
+  document.getElementById("who-opts").innerHTML =
+    D.departments.filter(function (d) { return d.name !== D.me.dept; })
+    .map(function (d) {
+      return '<button class="sheet__opt" data-who="' + U.esc(d.name) + '">' +
+        '<i class="dot" style="background:var(--wait)"></i>' +
+        "<span>" + U.esc(d.name) + "</span></button>";
+    }).join("");
+
+  document.getElementById("why-opts").innerHTML = D.blockerReasons.map(function (r) {
+    return '<button class="sheet__opt" data-why="' + U.esc(r) + '">' + U.esc(r) + "</button>";
+  }).join("");
+
+  document.getElementById("raise").addEventListener("click", function () {
+    var who = pickedWho, why = pickedWhy;
+    if (!why) { U.toast("Pick a reason so the blocker is diagnosable."); return; }
+
+    current.classList.remove("row--present");
+    current.classList.add("row--surface");
+    var head = current.querySelector(".row__head");
+    var existing = current.querySelector(".row__reason");
+    var html = '<div class="row__reason"><span class="ico" aria-hidden="true">▲</span>' +
+               "<span>Blocked · waiting on " + U.esc(who) + " — " + U.esc(why) + "</span></div>";
+    if (existing) existing.outerHTML = html; else head.insertAdjacentHTML("afterend", html);
+    current.querySelector(".row__foot").insertAdjacentHTML("afterbegin",
+      '<span class="chip chip--risk">▲ Blocked</span>');
+
+    sheet.close();
+    U.toast("Blocker raised against " + U.esc(who) + ". They’ve been notified — nobody else has.");
+  });
+})();
+</script>
+</body>
+</html>
