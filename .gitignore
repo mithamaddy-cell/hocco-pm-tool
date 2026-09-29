@@ -1,6 +1,7 @@
 # Secret keys — never commit
 .env
 .env.*
+!.env.example
 
 # Mac system files
 .DS_Store
