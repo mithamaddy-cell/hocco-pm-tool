@@ -59,7 +59,7 @@
     <div class="appbar__sub" id="sub"></div>
   </div>
   <a class="iconbtn" href="#" aria-label="Search">⌕</a>
-  <a class="iconbtn" href="hocco-mywork-mobile.html" aria-label="Notifications (on My Work)">◔</a>
+  <button class="iconbtn" id="bell" aria-label="Notifications"><span aria-hidden="true">◔</span></button>
   <a class="avatar" href="#" id="avatar" aria-label="Account menu"></a>
 </header>
 
@@ -121,8 +121,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=27"></script>
-<script src="hocco-ui.js?v=15"></script>
+<script src="hocco-api.js?v=28"></script>
+<script src="hocco-ui.js?v=17"></script>
 <script>
 (function () {
   var U = window.UI;
@@ -167,6 +167,7 @@
     message("Loading initiatives…");
     window.HoccoAPI.requireSignIn().then(function (u) {
       wireAccount(u);
+      U.bell(document.getElementById("bell"));
       return window.HoccoAPI.load();
     }).then(function (D) { render(rememberDepts(D)); }, function (err) {
       if (window.console) console.error(err);

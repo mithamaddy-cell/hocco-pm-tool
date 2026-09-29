@@ -105,6 +105,7 @@
     <h1 class="appbar__title" id="bar-name">Initiative</h1>
     <div class="appbar__sub" id="bar-sub"></div>
   </div>
+  <button class="iconbtn" id="bell" aria-label="Notifications"><span aria-hidden="true">◔</span></button>
   <a class="avatar" href="#" id="avatar" aria-label="Account menu"></a>
 </header>
 
@@ -202,8 +203,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=27"></script>
-<script src="hocco-ui.js?v=15"></script>
+<script src="hocco-api.js?v=28"></script>
+<script src="hocco-ui.js?v=17"></script>
 <script>
 (function () {
   var U = window.UI;
@@ -256,6 +257,7 @@
   function load() {
     window.HoccoAPI.requireSignIn().then(function (u) {
       wireAccount(u);
+      U.bell(document.getElementById("bell"));
       myDept = u.profile.department_id;
       canPrioritise = !!(u && u.profile && (u.profile.department_id === "leadership" || u.profile.is_admin));
       return window.HoccoAPI.load();
@@ -269,6 +271,7 @@
         return;
       }
       render(D, K);
+      openTrackFromLink();
     }, function (err) {
       if (window.console) console.error(err);
       document.getElementById("bar-sub").textContent = "Offline";
@@ -519,6 +522,21 @@
       '<span style="min-width:0"><span class="file__n">' + U.esc(f.n) + "</span>" +
       '<div class="file__m">' + U.esc(f.m) + "</div></span></div>";
   }).join("");
+  }
+
+  /* Arrived from a notification (&track=<slug>)? Show that track, open. */
+  function openTrackFromLink() {
+    var slug = new URLSearchParams(location.search).get("track");
+    if (!slug) return;
+    var lane = document.querySelector('#tracks .lane[data-track="' + slug + '"]');
+    if (!lane) return;
+    document.querySelector('.tab[data-panel="tracks"]').click();
+    document.querySelectorAll("#tracks .lane").forEach(function (l) {
+      var on = l === lane;
+      l.querySelector(".lane__head").setAttribute("aria-expanded", String(on));
+      l.querySelector(".lane__body").hidden = !on;
+    });
+    lane.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function ordinal(n) {

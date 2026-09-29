@@ -51,7 +51,7 @@
     <h1 class="appbar__title">My Work</h1>
     <div class="appbar__sub" id="sub"></div>
   </div>
-  <a class="iconbtn" href="#" id="bell" aria-label="Notifications">◔<span class="iconbtn__dot" id="bell-dot" style="display:none"></span></a>
+  <button class="iconbtn" id="bell" aria-label="Notifications"><span aria-hidden="true">◔</span></button>
   <a class="avatar" href="#" id="avatar" aria-label="Account menu"></a>
 </header>
 
@@ -169,21 +169,10 @@
   </div>
 </div>
 
-<!-- ===================== NOTIFICATIONS SHEET =====================
-     Addressed to your department — nobody else sees these. -->
-<div class="scrim" id="notif-scrim"></div>
-<div class="sheet" id="notif" role="dialog" aria-modal="true" aria-labelledby="notif-title" aria-hidden="true" data-open="false">
-  <div class="sheet__grip" aria-hidden="true"></div>
-  <h2 class="sheet__h" id="notif-title">Notifications</h2>
-  <p class="sheet__ctx" id="notif-ctx"></p>
-  <div id="notif-list"></div>
-  <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-notif>Close</button>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=27"></script>
-<script src="hocco-ui.js?v=15"></script>
+<script src="hocco-api.js?v=28"></script>
+<script src="hocco-ui.js?v=17"></script>
 <script>
 (function () {
   var U = window.UI, API = window.HoccoAPI;
@@ -219,6 +208,7 @@
     message("Loading your work…");
     API.requireSignIn().then(function (u) {
       user = u;
+      U.bell(document.getElementById("bell"));
       return API.load().then(render);
     }).catch(offline);
   }
@@ -362,57 +352,15 @@
       U.esc(r.label) + "</button>";
   }).join("");
 
-  loadNotifications();
+  jumpToStage();
   }
 
-  /* ================= Notifications ================= */
-  var notifSheet = U.sheet("notif");
-  var notifList = [];
-  function ago(ts) {
-    var mins = Math.round((Date.now() - new Date(ts).getTime()) / 60000);
-    if (mins < 1) return "Just now";
-    if (mins < 60) return mins + " min ago";
-    var h = Math.round(mins / 60);
-    if (h < 24) return h + " h ago";
-    var d = Math.round(h / 24);
-    return d + " day" + (d === 1 ? "" : "s") + " ago";
+  /* Arrived from a notification (#s-<step id>)? Scroll to that step. */
+  function jumpToStage() {
+    var m = /^#s-(.+)$/.exec(location.hash);
+    if (m) U.highlight(document.querySelector('[data-stage="' + m[1] + '"]'));
   }
-  function loadNotifications() {
-    API.notifications().then(function (list) {
-      notifList = list;
-      var unread = list.filter(function (n) { return !n.read_at; }).length;
-      document.getElementById("bell-dot").style.display = unread ? "" : "none";
-      document.getElementById("bell").setAttribute("aria-label",
-        "Notifications" + (unread ? ", " + unread + " unread" : ""));
-    }, function (err) { if (window.console) console.error(err); });
-  }
-  document.getElementById("bell").addEventListener("click", function (e) {
-    e.preventDefault();
-    if (!user) return;
-    document.getElementById("notif-ctx").textContent =
-      "For " + (meDept ? meDept.name : "your department") + ". Nobody else sees these.";
-    document.getElementById("notif-list").innerHTML = notifList.length ? notifList.map(function (n) {
-      var slug = D && D.initiativeSlug(n.initiative_id);
-      return '<div class="row row--' + (n.read_at ? "recede" : "present") + '">' +
-        '<div class="row__head"><span class="row__title">' + U.esc(n.title) + "</span>" +
-        '<span class="row__label">' + ago(n.created_at) + "</span></div>" +
-        (n.body ? '<div class="row__reason">' + U.esc(n.body) + "</div>" : "") +
-        (slug ? '<div class="row__foot"><a class="rowlink" href="hocco-initiative-detail.html?id=' +
-                encodeURIComponent(slug) + '">View initiative →</a></div>' : "") +
-      "</div>";
-    }).join("") : '<div class="emptyfilter">Nothing new for your department.</div>';
-    notifSheet.open();
-    if (notifList.some(function (n) { return !n.read_at; })) {
-      API.markNotificationsRead().then(function () {
-        notifList.forEach(function (n) { n.read_at = n.read_at || new Date().toISOString(); });
-        document.getElementById("bell-dot").style.display = "none";
-        document.getElementById("bell").setAttribute("aria-label", "Notifications");
-      });
-    }
-  });
-  notifSheet.el.addEventListener("click", function (e) {
-    if (e.target.closest("[data-close-notif]")) notifSheet.close();
-  });
+  window.addEventListener("hashchange", jumpToStage);
 
   /* ================= Sheet behaviour ================= */
   var sheet = U.sheet("sheet");

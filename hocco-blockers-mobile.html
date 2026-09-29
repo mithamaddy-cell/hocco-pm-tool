@@ -36,7 +36,7 @@
     <h1 class="appbar__title">Blockers</h1>
     <div class="appbar__sub" id="sub"></div>
   </div>
-  <a class="iconbtn" href="hocco-mywork-mobile.html" aria-label="Notifications (on My Work)">◔</a>
+  <button class="iconbtn" id="bell" aria-label="Notifications"><span aria-hidden="true">◔</span></button>
   <a class="avatar" href="#" id="avatar" aria-label="Account menu"></a>
 </header>
 
@@ -92,8 +92,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=27"></script>
-<script src="hocco-ui.js?v=15"></script>
+<script src="hocco-api.js?v=28"></script>
+<script src="hocco-ui.js?v=17"></script>
 <script>
 (function () {
   var U = window.UI, API = window.HoccoAPI;
@@ -127,6 +127,7 @@
     /* Who's looking decides which buttons show; signed out is fine (read-only). */
     API.requireSignIn().then(function (u) {
       wireAccount(u);
+      U.bell(document.getElementById("bell"));
       myDept = u.profile.department_id;
       return API.load();
     }).then(function (D) { render(rememberDepts(D)); }, function (err) {
@@ -175,7 +176,7 @@
         ? b.against + " says it isn’t theirs" + (b.disputeNote ? ": “" + b.disputeNote + "”" : "")
       : b.status === "open" ? "Waiting for " + b.against + " to respond"
       : "";
-    return '<div class="row row--' + tier + '">' +
+    return '<div class="row row--' + tier + '" id="b-' + b.id + '">' +
       '<div class="row__head"><span class="row__title">' + U.esc(b.title) + "</span>" +
       '<span class="row__label num">' + b.days + " days</span></div>" +
       '<div class="claim">' + icon +
@@ -211,7 +212,14 @@
   }
   renderLists(matchNow);
   if (!filterCtl) filterCtl = U.filters(document.getElementById("filter-b"), renderLists);
+  jumpToBlocker();
   }
+
+  /* Arrived from a notification (#b-<blocker id>)? Scroll to that blocker. */
+  function jumpToBlocker() {
+    if (/^#b-/.test(location.hash)) U.highlight(document.getElementById(location.hash.slice(1)));
+  }
+  window.addEventListener("hashchange", jumpToBlocker);
 
   /* ---- Responses: saved by the database, which checks who may do what ---- */
   function respond(id, action, note, okMsg) {

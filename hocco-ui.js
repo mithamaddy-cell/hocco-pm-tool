@@ -330,6 +330,126 @@ window.UI = (function () {
     _account.showPw(false);
     _account.ctl.open();
   }
+  /* ---- Notification bell — shared by every screen ----------------------
+     Unread count on the bell (same red count badge as the bottom bar),
+     a list, Mark all as read, and each notification opens exactly what
+     it's about. Only your department's (and your own) notifications are
+     ever returned by the database. */
+  function ago(ts) {
+    var mins = Math.round((Date.now() - new Date(ts).getTime()) / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return mins + " min ago";
+    var h = Math.round(mins / 60);
+    if (h < 24) return h + " h ago";
+    var d = Math.round(h / 24);
+    return d + " day" + (d === 1 ? "" : "s") + " ago";
+  }
+
+  /* Where a notification takes you. */
+  function notifLink(n) {
+    var slug = n.initiatives && n.initiatives.slug;
+    var detail = slug ? "hocco-initiative-detail.html?id=" + encodeURIComponent(slug) : null;
+    if (/^blocker_/.test(n.kind) && n.blocker_id) return "hocco-blockers-mobile.html#b-" + n.blocker_id;
+    if (n.kind === "stage_assigned") return "hocco-mywork-mobile.html" + (n.stage_id ? "#s-" + n.stage_id : "");
+    if (/^gate_/.test(n.kind) && detail) {
+      return detail + (n.tracks && n.tracks.slug ? "&track=" + encodeURIComponent(n.tracks.slug) : "");
+    }
+    if (n.kind === "person_deactivated") return "hocco-mywork-mobile.html";
+    return detail || "hocco-mywork-mobile.html";
+  }
+
+  var _bell = null;
+  function bell(btn) {
+    var API = window.HoccoAPI;
+    if (!_bell) {
+      var scrim = document.createElement("div");
+      scrim.className = "scrim"; scrim.id = "notif-scrim";
+      var sh = document.createElement("div");
+      sh.className = "sheet"; sh.id = "notif";
+      sh.setAttribute("role", "dialog"); sh.setAttribute("aria-modal", "true");
+      sh.setAttribute("aria-labelledby", "notif-title"); sh.setAttribute("aria-hidden", "true");
+      sh.setAttribute("data-open", "false");
+      sh.innerHTML =
+        '<div class="sheet__grip" aria-hidden="true"></div>' +
+        '<h2 class="sheet__h" id="notif-title" style="font-size:17px;font-weight:700;letter-spacing:-0.02em;margin:0 0 2px">Notifications</h2>' +
+        '<p class="sheet__ctx" style="font-size:12.5px;color:var(--ink-3);margin:0 0 var(--s4)">For your department and for you. Nobody else sees these.</p>' +
+        '<div id="notif-list"></div>' +
+        '<button class="btn btn--ghost btn--block" style="margin-top:var(--s2);display:none" id="notif-all">Mark all as read</button>' +
+        '<button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-notif>Close</button>';
+      document.body.appendChild(scrim); document.body.appendChild(sh);
+      _bell = { ctl: sheet("notif"), el: sh, list: [], btn: null };
+
+      sh.addEventListener("click", function (e) {
+        if (e.target.closest("[data-close-notif]")) return _bell.ctl.close();
+        if (e.target.closest("#notif-all")) {
+          API.markNotificationsRead().then(load);
+          return;
+        }
+        var row = e.target.closest("[data-notif]");
+        if (!row) return;
+        var n = _bell.list.filter(function (x) { return x.id === row.dataset.notif; })[0];
+        if (!n) return;
+        var go = function () {
+          var to = notifLink(n);
+          _bell.ctl.close();
+          var here = location.pathname.split("/").pop();
+          if (to.split("#")[0] === here && to.indexOf("#") > -1) {
+            location.hash = to.split("#")[1];            /* same screen: just jump */
+            window.dispatchEvent(new HashChangeEvent("hashchange"));
+          } else {
+            location.href = to;
+          }
+        };
+        if (n.read_at) return go();
+        API.markNotificationRead(n.id).then(function () { n.read_at = new Date().toISOString(); paint(); }).then(go, go);
+      });
+    }
+    _bell.btn = btn;
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      paint();                 /* open straight away with what we have… */
+      _bell.ctl.open();
+      load();                  /* …and refresh it while it's open */
+    });
+    load();
+  }
+
+  function paint() {
+    var list = _bell.list;
+    var unread = list.filter(function (n) { return !n.read_at; }).length;
+    var b = _bell.btn;
+    if (b) {
+      b.innerHTML = '<span aria-hidden="true">◔</span>' +
+        (unread ? '<span class="navitem__badge num" style="top:-4px;left:auto;right:-4px">' + (unread > 9 ? "9+" : unread) + "</span>" : "");
+      b.setAttribute("aria-label", "Notifications" + (unread ? ", " + unread + " unread" : ""));
+    }
+    _bell.el.querySelector("#notif-list").innerHTML = list.length ? list.map(function (n) {
+      return '<div class="row row--' + (n.read_at ? "recede" : "present") + '" data-notif="' + n.id + '" role="button" tabindex="0">' +
+        '<div class="row__head"><span class="row__title">' + esc(n.title) + "</span>" +
+        '<span class="row__label">' + ago(n.created_at) + "</span></div>" +
+        (n.body ? '<div class="row__reason"><span>' + esc(n.body) + "</span></div>" : "") +
+        '<div class="row__foot">' + (n.read_at ? "" : '<span class="chip chip--pending">New</span>') +
+          '<span class="rowlink" style="margin-left:auto">Open →</span></div>' +
+      "</div>";
+    }).join("") : '<div class="emptyfilter">Nothing new for your department.</div>';
+    _bell.el.querySelector("#notif-all").style.display = unread ? "" : "none";
+  }
+
+  function load() {
+    return window.HoccoAPI.notifications().then(function (list) {
+      _bell.list = list; paint();
+    }, function (err) { if (window.console) console.error(err); });
+  }
+
+  /* After arriving from a notification: scroll to the item and give it
+     the same brief "lift" the app uses for newly unblocked rows. */
+  function highlight(el) {
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("row--unblocked");
+    setTimeout(function () { el.classList.remove("row--unblocked"); }, 2600);
+  }
+
   var FIELD = "width:100%;font:inherit;font-size:14.5px;color:var(--ink);background:var(--glass-faint);" +
               "border:1px solid var(--edge-strong);border-radius:var(--r-md);padding:var(--s3);" +
               "min-height:44px;margin:4px 0 var(--s3)";
@@ -337,6 +457,6 @@ window.UI = (function () {
   return {
     esc: esc, brandChip: brandChip, stateChip: stateChip, bottomNav: bottomNav,
     sheet: sheet, toast: toast, filters: filters, account: account, initials: initials,
-    brandName: brandName
+    brandName: brandName, bell: bell, highlight: highlight
   };
 })();

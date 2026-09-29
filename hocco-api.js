@@ -118,7 +118,7 @@ window.HoccoAPI = (function () {
      your own department's — never anyone else's). */
   function notifications() {
     return client().from("notifications")
-      .select("id, kind, title, body, created_at, read_at, initiative_id")
+      .select("id, kind, title, body, created_at, read_at, initiative_id, blocker_id, stage_id, track_id, initiatives(slug), tracks(slug)")
       .order("created_at", { ascending: false }).limit(20)
       .then(function (res) {
         if (res.error) throw new Error(res.error.message);
@@ -126,6 +126,7 @@ window.HoccoAPI = (function () {
       });
   }
   function markNotificationsRead() { return rpc("mark_notifications_read", {}); }
+  function markNotificationRead(id) { return rpc("mark_notification_read", { p_id: id }); }
   function decideGate(gateId, decision, reasonId, upstream, note) {
     return rpc("decide_gate", { p_gate_id: gateId, p_decision: decision, p_reason_id: reasonId || null,
                                 p_upstream: !!upstream, p_note: note || null });
@@ -787,6 +788,7 @@ window.HoccoAPI = (function () {
            requireSignIn: requireSignIn, landingFor: landingFor,
            setStageStatus: setStageStatus,
            raiseBlocker: raiseBlocker, notifications: notifications, markNotificationsRead: markNotificationsRead,
+           markNotificationRead: markNotificationRead,
            respondToBlocker: respondToBlocker, decideGate: decideGate, setPriority: setPriority,
            assignStage: assignStage, adminListPeople: adminListPeople, adminAddPerson: adminAddPerson,
            adminSetActive: adminSetActive, adminSetCovering: adminSetCovering,

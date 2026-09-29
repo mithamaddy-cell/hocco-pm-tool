@@ -32,6 +32,7 @@
     <h1 class="appbar__title">Admin</h1>
     <div class="appbar__sub" id="sub">People &amp; access</div>
   </div>
+  <button class="iconbtn" id="bell" aria-label="Notifications"><span aria-hidden="true">◔</span></button>
   <a class="avatar" href="#" id="avatar" aria-label="Account menu"></a>
 </header>
 
@@ -87,8 +88,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=27"></script>
-<script src="hocco-ui.js?v=15"></script>
+<script src="hocco-api.js?v=28"></script>
+<script src="hocco-ui.js?v=17"></script>
 <script>
 (function () {
   var U = window.UI, API = window.HoccoAPI;
@@ -106,6 +107,7 @@
     message("Loading people…");
     API.requireSignIn().then(function (u) {
       user = u;
+    U.bell(document.getElementById("bell"));
       document.getElementById("avatar").textContent = U.initials(u.profile.full_name);
       if (!u.profile.is_admin) {
         message("Only admins can open this page." +
