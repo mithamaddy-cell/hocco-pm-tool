@@ -70,6 +70,23 @@ window.HoccoAPI = (function () {
   function setStageStatus(stageId, status) {
     return rpc("set_stage_status", { p_stage_id: stageId, p_status: status });
   }
+  function raiseBlocker(stageId, againstDeptId, reasonId, note) {
+    return rpc("raise_blocker", { p_stage_id: stageId, p_against: againstDeptId,
+                                  p_reason_id: reasonId, p_note: note });
+  }
+
+  /* Your department's in-app notifications (the database only returns
+     your own department's — never anyone else's). */
+  function notifications() {
+    return client().from("notifications")
+      .select("id, kind, title, body, created_at, read_at, initiative_id")
+      .order("created_at", { ascending: false }).limit(20)
+      .then(function (res) {
+        if (res.error) throw new Error(res.error.message);
+        return res.data;
+      });
+  }
+  function markNotificationsRead() { return rpc("mark_notifications_read", {}); }
 
   /* ---- Dates -------------------------------------------------------------- */
   function todayDate() {
@@ -513,6 +530,12 @@ window.HoccoAPI = (function () {
       getMyWork: getMyWork,
       blockerReasons: db.reasons.slice().sort(function (a, b) { return a.sort_order - b.sort_order; })
         .map(function (r) { return r.label; }),
+      blockerReasonList: db.reasons.slice().sort(function (a, b) { return a.sort_order - b.sort_order; })
+        .map(function (r) { return { id: r.id, label: r.label }; }),
+      initiativeSlug: function (uuid) {
+        var r = db.initiatives.filter(function (i) { return i.id === uuid; })[0];
+        return r ? r.slug : null;
+      },
       departmentList: db.departments.slice().sort(function (a, b) { return a.sort_order - b.sort_order; })
         .map(function (d) { return { id: d.id, name: d.name, leadership: d.id === "leadership" }; }),
       initiatives: initiatives,
@@ -614,5 +637,6 @@ window.HoccoAPI = (function () {
     };
   }
 
-  return { load: load, me: me, signIn: signIn, signOut: signOut, setStageStatus: setStageStatus };
+  return { load: load, me: me, signIn: signIn, signOut: signOut, setStageStatus: setStageStatus,
+           raiseBlocker: raiseBlocker, notifications: notifications, markNotificationsRead: markNotificationsRead };
 })();

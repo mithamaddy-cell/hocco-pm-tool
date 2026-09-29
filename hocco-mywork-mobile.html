@@ -51,7 +51,7 @@
     <h1 class="appbar__title">My Work</h1>
     <div class="appbar__sub" id="sub"></div>
   </div>
-  <a class="iconbtn" href="#" aria-label="Notifications">◔<span class="iconbtn__dot"></span></a>
+  <a class="iconbtn" href="#" id="bell" aria-label="Notifications">◔<span class="iconbtn__dot" id="bell-dot" style="display:none"></span></a>
   <a class="avatar" href="#" id="avatar" aria-label="Account menu"></a>
 </header>
 
@@ -150,16 +150,27 @@
     <h2 class="sheet__h">Why?</h2>
     <p class="sheet__ctx" id="why-ctx"></p>
     <div id="why-opts"></div>
-    <label class="meta" style="display:block;margin:var(--s3) 0 var(--s2)">Anything to add? (optional)</label>
-    <textarea class="field" id="why-note" placeholder="e.g. vendor mockup came back wrong twice"></textarea>
+    <label class="meta" for="why-note" style="display:block;margin:var(--s3) 0 var(--s2)">One line of why</label>
+    <textarea class="field" id="why-note" maxlength="200" placeholder="e.g. vendor mockup came back wrong twice"></textarea>
     <button class="btn btn--primary btn--block" style="margin-top:var(--s3)" id="raise">Raise blocker</button>
     <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-back="who">Back</button>
   </div>
 </div>
 
+<!-- ===================== NOTIFICATIONS SHEET =====================
+     Addressed to your department — nobody else sees these. -->
+<div class="scrim" id="notif-scrim"></div>
+<div class="sheet" id="notif" role="dialog" aria-modal="true" aria-labelledby="notif-title" aria-hidden="true" data-open="false">
+  <div class="sheet__grip" aria-hidden="true"></div>
+  <h2 class="sheet__h" id="notif-title">Notifications</h2>
+  <p class="sheet__ctx" id="notif-ctx"></p>
+  <div id="notif-list"></div>
+  <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-notif>Close</button>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=17"></script>
+<script src="hocco-api.js?v=18"></script>
 <script src="hocco-ui.js?v=12"></script>
 <script>
 (function () {
@@ -354,22 +365,74 @@
   document.getElementById("who-opts").innerHTML =
     D.departmentList.filter(function (d) { return d.id !== meDept.id && !d.leadership; })
     .map(function (d) {
-      return '<button class="sheet__opt" data-who="' + U.esc(d.name) + '">' +
+      return '<button class="sheet__opt" data-who="' + U.esc(d.name) + '" data-who-id="' + U.esc(d.id) + '">' +
         '<i class="dot" style="background:var(--wait)"></i>' +
         "<span>" + U.esc(d.name) + "</span></button>";
     }).join("");
 
-  document.getElementById("why-opts").innerHTML = D.blockerReasons.map(function (r) {
-    return '<button class="sheet__opt" data-why="' + U.esc(r) + '">' + U.esc(r) + "</button>";
+  document.getElementById("why-opts").innerHTML = D.blockerReasonList.map(function (r) {
+    return '<button class="sheet__opt" data-why="' + U.esc(r.label) + '" data-why-id="' + r.id + '">' +
+      U.esc(r.label) + "</button>";
   }).join("");
+
+  loadNotifications();
   }
+
+  /* ================= Notifications ================= */
+  var notifSheet = U.sheet("notif");
+  var notifList = [];
+  function ago(ts) {
+    var mins = Math.round((Date.now() - new Date(ts).getTime()) / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return mins + " min ago";
+    var h = Math.round(mins / 60);
+    if (h < 24) return h + " h ago";
+    var d = Math.round(h / 24);
+    return d + " day" + (d === 1 ? "" : "s") + " ago";
+  }
+  function loadNotifications() {
+    API.notifications().then(function (list) {
+      notifList = list;
+      var unread = list.filter(function (n) { return !n.read_at; }).length;
+      document.getElementById("bell-dot").style.display = unread ? "" : "none";
+      document.getElementById("bell").setAttribute("aria-label",
+        "Notifications" + (unread ? ", " + unread + " unread" : ""));
+    }, function (err) { if (window.console) console.error(err); });
+  }
+  document.getElementById("bell").addEventListener("click", function (e) {
+    e.preventDefault();
+    if (!user) return;
+    document.getElementById("notif-ctx").textContent =
+      "For " + (meDept ? meDept.name : "your department") + ". Nobody else sees these.";
+    document.getElementById("notif-list").innerHTML = notifList.length ? notifList.map(function (n) {
+      var slug = D && D.initiativeSlug(n.initiative_id);
+      return '<div class="row row--' + (n.read_at ? "recede" : "present") + '">' +
+        '<div class="row__head"><span class="row__title">' + U.esc(n.title) + "</span>" +
+        '<span class="row__label">' + ago(n.created_at) + "</span></div>" +
+        (n.body ? '<div class="row__reason">' + U.esc(n.body) + "</div>" : "") +
+        (slug ? '<div class="row__foot"><a class="rowlink" href="hocco-initiative-detail.html?id=' +
+                encodeURIComponent(slug) + '">View initiative →</a></div>' : "") +
+      "</div>";
+    }).join("") : '<div class="emptyfilter">Nothing new for your department.</div>';
+    notifSheet.open();
+    if (notifList.some(function (n) { return !n.read_at; })) {
+      API.markNotificationsRead().then(function () {
+        notifList.forEach(function (n) { n.read_at = n.read_at || new Date().toISOString(); });
+        document.getElementById("bell-dot").style.display = "none";
+        document.getElementById("bell").setAttribute("aria-label", "Notifications");
+      });
+    }
+  });
+  notifSheet.el.addEventListener("click", function (e) {
+    if (e.target.closest("[data-close-notif]")) notifSheet.close();
+  });
 
   /* ================= Sheet behaviour ================= */
   var sheet = U.sheet("sheet");
   var current = null;
   /* Kept in closure, not on the sheet element — a data-* attribute on the
      sheet root gets picked up by closest() from every descendant click. */
-  var pickedWho = null, pickedWhy = null;
+  var pickedWho = null, pickedWhy = null, pickedWhoId = null, pickedWhyId = null;
 
   function showStep(id) {
     document.querySelectorAll("#sheet .step").forEach(function (s) {
@@ -408,7 +471,9 @@
     var who = e.target.closest("[data-who]");
     if (who) {
       pickedWho = who.dataset.who;
-      pickedWhy = null;
+      pickedWhoId = who.dataset.whoId;
+      pickedWhy = null; pickedWhyId = null;
+      document.getElementById("why-note").value = "";
       document.getElementById("why-ctx").textContent = "Blocked by " + pickedWho + ". Pick the closest reason.";
       document.querySelectorAll("[data-why]").forEach(function (b) {
         b.style.borderColor = "var(--edge)";
@@ -420,6 +485,7 @@
     var why = e.target.closest("[data-why]");
     if (why) {
       pickedWhy = why.dataset.why;
+      pickedWhyId = Number(why.dataset.whyId);
       document.querySelectorAll("[data-why]").forEach(function (b) {
         b.style.borderColor = (b === why) ? "var(--raspberry-deep)" : "var(--edge)";
         b.style.background  = (b === why) ? "var(--glass-strong)"   : "var(--glass-faint)";
@@ -457,22 +523,25 @@
     }, function (err) { u.disabled = false; U.toast(U.esc(err.message)); });
   });
 
+  /* Raise blocker — saved by the database, which checks the rules (your
+     stage, not your own department, reason from the list, a line of why),
+     marks the stage blocked and notifies the named department. */
   document.getElementById("raise").addEventListener("click", function () {
-    var who = pickedWho, why = pickedWhy;
-    if (!why) { U.toast("Pick a reason so the blocker is diagnosable."); return; }
+    var who = pickedWho, note = document.getElementById("why-note").value.trim();
+    if (!pickedWhyId) { U.toast("Pick a reason so the blocker is diagnosable."); return; }
+    if (!note) { U.toast("Add one line saying why it’s stuck."); document.getElementById("why-note").focus(); return; }
 
-    current.classList.remove("row--present");
-    current.classList.add("row--surface");
-    var head = current.querySelector(".row__head");
-    var existing = current.querySelector(".row__reason");
-    var html = '<div class="row__reason"><span class="ico" aria-hidden="true">▲</span>' +
-               "<span>Blocked · waiting on " + U.esc(who) + " — " + U.esc(why) + "</span></div>";
-    if (existing) existing.outerHTML = html; else head.insertAdjacentHTML("afterend", html);
-    current.querySelector(".row__foot").insertAdjacentHTML("afterbegin",
-      '<span class="chip chip--risk">▲ Blocked</span>');
-
-    sheet.close();
-    U.toast("Blocker raised against " + U.esc(who) + ". They’ve been notified — nobody else has.");
+    var btn = this;
+    btn.disabled = true;
+    API.raiseBlocker(current.dataset.stage, pickedWhoId, pickedWhyId, note).then(function () {
+      btn.disabled = false;
+      sheet.close();
+      U.toast("Blocker raised against " + U.esc(who) + ". They’ve been notified — nobody else has.");
+      return refresh();
+    }, function (err) {
+      btn.disabled = false;
+      U.toast(U.esc(err.message));
+    });
   });
 })();
 </script>
