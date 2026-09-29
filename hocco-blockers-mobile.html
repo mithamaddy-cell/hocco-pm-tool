@@ -19,6 +19,13 @@
            background: var(--glass-faint); border: 1px solid var(--edge-strong);
            border-radius: var(--r-md); padding: var(--s3); min-height: 76px; resize: vertical; }
   .field::placeholder { color: var(--ink-3); }
+  /* Your initials → account menu (same style as My Work) */
+  .avatar {
+    width: var(--touch); height: var(--touch); border-radius: var(--r-pill);
+    background: var(--indigo); color: #fff; display: grid; place-items: center;
+    font-size: 13px; font-weight: 720; letter-spacing: 0.02em; flex: none;
+    text-decoration: none;
+  }
 </style>
 </head>
 <body>
@@ -30,6 +37,7 @@
     <div class="appbar__sub" id="sub"></div>
   </div>
   <a class="iconbtn" href="hocco-mywork-mobile.html" aria-label="Notifications (on My Work)">◔</a>
+  <a class="avatar" href="#" id="avatar" aria-label="Account menu"></a>
 </header>
 
 <main class="frame screen">
@@ -84,11 +92,27 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=24"></script>
-<script src="hocco-ui.js?v=12"></script>
+<script src="hocco-api.js?v=25"></script>
+<script src="hocco-ui.js?v=13"></script>
 <script>
 (function () {
   var U = window.UI, API = window.HoccoAPI;
+
+  /* ---- Signed-in person: initials + account menu ---- */
+  var user = null, deptNames = {};
+  function wireAccount(u) {
+    user = u;
+    document.getElementById("avatar").textContent = U.initials(u.profile.full_name);
+  }
+  document.getElementById("avatar").addEventListener("click", function (e) {
+    e.preventDefault();
+    if (user) U.account(user, deptNames[user.profile.department_id] || "");
+  });
+  function rememberDepts(D) {
+    (D.departmentList || []).forEach(function (d) { deptNames[d.id] = d.name; });
+    return D;
+  }
+
   var D, myDept = null, filterCtl, matchNow = function () { return true; };
   document.getElementById("nav").innerHTML = U.bottomNav("blockers", 0);
 
@@ -101,11 +125,11 @@
     document.getElementById("sub").textContent = "Loading…";
     message("Loading blockers…");
     /* Who's looking decides which buttons show; signed out is fine (read-only). */
-    API.me().catch(function () { return null; }).then(function (u) {
-      myDept = u && u.profile ? u.profile.department_id : null;
-      document.getElementById("signin-hint").style.display = myDept ? "none" : "";
+    API.requireSignIn().then(function (u) {
+      wireAccount(u);
+      myDept = u.profile.department_id;
       return API.load();
-    }).then(render, function (err) {
+    }).then(function (D) { render(rememberDepts(D)); }, function (err) {
       if (window.console) console.error(err);
       document.getElementById("sub").textContent = "Offline";
       message("Couldn’t reach the database just now. Check your connection and try again." +

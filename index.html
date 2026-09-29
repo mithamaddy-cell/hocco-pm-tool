@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sign in — Hocco PM</title>
+<script src="hocco-theme.js?v=12"></script>
+<link rel="stylesheet" href="hocco-tokens.css?v=12">
+<style>
+  .field { width: 100%; font: inherit; font-size: 14.5px; color: var(--ink);
+           background: var(--glass-faint); border: 1px solid var(--edge-strong);
+           border-radius: var(--r-md); padding: var(--s3); min-height: 44px; margin: 4px 0 var(--s3); }
+</style>
+</head>
+<body>
+<div class="ground" aria-hidden="true"></div>
+
+<!-- The front door. Everyone arrives here; after signing in, Leadership
+     lands on Portfolio and everyone else on My Work (or wherever they
+     were trying to go). -->
+<header class="appbar">
+  <div style="flex:1;min-width:0">
+    <h1 class="appbar__title">Hocco PM</h1>
+    <div class="appbar__sub" id="sub">Where every initiative is, and what it’s waiting on</div>
+  </div>
+</header>
+
+<main class="frame screen">
+  <div id="door" style="margin-top:var(--s4)">
+    <div class="emptyfilter" role="status">Checking if you’re signed in…</div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="hocco-config.js?v=15"></script>
+<script src="hocco-api.js?v=25"></script>
+<script src="hocco-ui.js?v=13"></script>
+<script>
+(function () {
+  var U = window.UI, API = window.HoccoAPI;
+  var params = new URLSearchParams(location.search);
+  /* Only ever send people on to one of our own screens. */
+  var next = params.get("next");
+  if (next && !/^hocco-[a-z-]+\.html(\?[^#]*)?$/.test(next)) next = null;
+
+  function go(u) { location.replace(next || API.landingFor(u)); }
+
+  function form(err) {
+    document.getElementById("door").innerHTML =
+      '<form id="signin" class="glass" style="padding:var(--s4);border-radius:var(--r-md)">' +
+        '<p class="h3" style="margin-bottom:var(--s2)">Sign in</p>' +
+        '<p class="meta" style="margin:0 0 var(--s3)">Use your work email and password.</p>' +
+        (err ? '<p class="meta" role="alert" style="color:var(--risk);margin:0 0 var(--s3)">▲ ' + U.esc(err) + "</p>" : "") +
+        '<label class="meta" for="si-email">Email</label>' +
+        '<input class="field" id="si-email" type="email" autocomplete="username" required>' +
+        '<label class="meta" for="si-pw">Password</label>' +
+        '<input class="field" id="si-pw" type="password" autocomplete="current-password" required>' +
+        '<button class="btn btn--primary btn--block" type="submit">Sign in</button>' +
+      "</form>";
+    document.getElementById("si-email").focus();
+  }
+
+  document.addEventListener("submit", function (e) {
+    if (e.target.id !== "signin") return;
+    e.preventDefault();
+    var btn = e.target.querySelector("button");
+    btn.textContent = "Signing in…"; btn.disabled = true;
+    API.signIn(document.getElementById("si-email").value.trim(), document.getElementById("si-pw").value)
+      .then(function (u) {
+        if (!u || !u.profile) {
+          return API.signOut().then(function () { form("This account isn’t linked to a department yet. Ask an admin."); });
+        }
+        go(u);
+      }, function (err) { form(err.message); });
+  });
+
+  /* Already signed in? Go straight through. */
+  API.me().then(function (u) {
+    if (u && u.profile) return go(u);
+    if (u) return API.signOut().then(function () { form("This account isn’t linked to a department yet. Ask an admin."); });
+    form();
+  }, function () {
+    document.getElementById("door").innerHTML =
+      '<div class="emptyfilter" role="status">Couldn’t reach the database just now. Check your connection and try again.' +
+      '<div style="margin-top:var(--s3)"><button class="btn btn--ghost" onclick="location.reload()">Try again</button></div></div>';
+  });
+})();
+</script>
+</body>
+</html>

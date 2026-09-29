@@ -66,6 +66,26 @@ window.HoccoAPI = (function () {
   }
   function signOut() { return client().auth.signOut(); }
 
+  /* Where someone lands after signing in: Leadership → Portfolio,
+     everyone else → My Work. */
+  function landingFor(u) {
+    return u && u.profile && u.profile.department_id === "leadership"
+      ? "hocco-portfolio-mobile.html" : "hocco-mywork-mobile.html";
+  }
+
+  /* Every screen calls this first. Signed in → resolves with the person.
+     Not signed in → goes to the front door (index.html), which brings them
+     back here afterwards. The database rules are the real protection; this
+     just stops people seeing empty screens. */
+  function requireSignIn() {
+    return me().then(function (u) {
+      if (u && u.profile) return u;
+      var here = location.pathname.split("/").pop() + location.search;
+      location.replace("index.html?next=" + encodeURIComponent(here) + (u ? "&nolink=1" : ""));
+      return new Promise(function () {});       /* stop here while leaving */
+    });
+  }
+
   /* Change the signed-in person's own password. */
   function changePassword(newPassword) {
     return client().auth.updateUser({ password: newPassword }).then(function (res) {
@@ -713,6 +733,7 @@ window.HoccoAPI = (function () {
   }
 
   return { load: load, me: me, signIn: signIn, signOut: signOut, changePassword: changePassword,
+           requireSignIn: requireSignIn, landingFor: landingFor,
            setStageStatus: setStageStatus,
            raiseBlocker: raiseBlocker, notifications: notifications, markNotificationsRead: markNotificationsRead,
            respondToBlocker: respondToBlocker, decideGate: decideGate, setPriority: setPriority,

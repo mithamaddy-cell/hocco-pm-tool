@@ -87,6 +87,13 @@
            background: var(--glass-faint); border: 1px solid var(--edge-strong);
            border-radius: var(--r-md); padding: var(--s3); min-height: 76px; resize: vertical; }
   .field::placeholder { color: var(--ink-3); }
+  /* Your initials → account menu (same style as My Work) */
+  .avatar {
+    width: var(--touch); height: var(--touch); border-radius: var(--r-pill);
+    background: var(--indigo); color: #fff; display: grid; place-items: center;
+    font-size: 13px; font-weight: 720; letter-spacing: 0.02em; flex: none;
+    text-decoration: none;
+  }
 </style>
 </head>
 <body>
@@ -98,7 +105,7 @@
     <h1 class="appbar__title" id="bar-name">Initiative</h1>
     <div class="appbar__sub" id="bar-sub"></div>
   </div>
-  <a class="iconbtn" href="#" aria-label="Notifications">◔</a>
+  <a class="avatar" href="#" id="avatar" aria-label="Account menu"></a>
 </header>
 
 <main class="frame screen">
@@ -195,12 +202,28 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=24"></script>
-<script src="hocco-ui.js?v=12"></script>
+<script src="hocco-api.js?v=25"></script>
+<script src="hocco-ui.js?v=13"></script>
 <script>
 (function () {
   var U = window.UI;
   var id = new URLSearchParams(location.search).get("id");
+
+  /* ---- Signed-in person: initials + account menu ---- */
+  var user = null, deptNames = {};
+  function wireAccount(u) {
+    user = u;
+    document.getElementById("avatar").textContent = U.initials(u.profile.full_name);
+  }
+  document.getElementById("avatar").addEventListener("click", function (e) {
+    e.preventDefault();
+    if (user) U.account(user, deptNames[user.profile.department_id] || "");
+  });
+  function rememberDepts(D) {
+    (D.departmentList || []).forEach(function (d) { deptNames[d.id] = d.name; });
+    return D;
+  }
+
 
   /* ---- Tabs and Back work straight away, even while data loads ---- */
   var tabs = [].slice.call(document.querySelectorAll(".tab"));
@@ -231,12 +254,13 @@
     load();
   }
   function load() {
-    window.HoccoAPI.me().catch(function () { return null; }).then(function (u) {
-      myDept = u && u.profile ? u.profile.department_id : null;
+    window.HoccoAPI.requireSignIn().then(function (u) {
+      wireAccount(u);
+      myDept = u.profile.department_id;
       canPrioritise = !!(u && u.profile && (u.profile.department_id === "leadership" || u.profile.is_admin));
       return window.HoccoAPI.load();
     }).then(function (D) {
-      lastD = D;
+      lastD = rememberDepts(D);
       var K = D.getInitiative(id);
       if (!K) {
         document.getElementById("bar-sub").textContent = "";

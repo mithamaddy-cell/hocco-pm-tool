@@ -241,8 +241,94 @@ window.UI = (function () {
     return { match: match, state: function () { return state; } };
   }
 
+  /* ---- Account menu — shared by every screen ---------------------------
+     Tap your initials: who you're signed in as, Change password, Sign out.
+     Built once and appended to <body>, like the filter sheet. Needs
+     window.HoccoAPI. `user` = { email, profile: { full_name } },
+     `deptName` = the department's display name. */
+  function initials(name) {
+    return String(name || "").split(/[^A-Za-z]+/).filter(Boolean)
+      .map(function (w) { return w[0]; }).join("").slice(0, 2).toUpperCase();
+  }
+
+  var _account = null;
+  function account(user, deptName, onSignedOut) {
+    if (!_account) {
+      var scrim = document.createElement("div");
+      scrim.className = "scrim"; scrim.id = "account-scrim";
+      var sh = document.createElement("div");
+      sh.className = "sheet"; sh.id = "account";
+      sh.setAttribute("role", "dialog"); sh.setAttribute("aria-modal", "true");
+      sh.setAttribute("aria-labelledby", "account-name"); sh.setAttribute("aria-hidden", "true");
+      sh.setAttribute("data-open", "false");
+      sh.innerHTML =
+        '<div class="sheet__grip" aria-hidden="true"></div>' +
+        '<h2 class="sheet__h" id="account-name" style="font-size:17px;font-weight:700;letter-spacing:-0.02em;margin:0 0 2px"></h2>' +
+        '<p class="sheet__ctx" id="account-ctx" style="font-size:12.5px;color:var(--ink-3);margin:0 0 var(--s4)"></p>' +
+        '<div id="account-main">' +
+          '<button class="btn btn--ghost btn--block" data-show-pw>Change password</button>' +
+          '<button class="btn btn--primary btn--block" style="margin-top:var(--s2)" data-signout>Sign out</button>' +
+          '<button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-account>Close</button>' +
+        "</div>" +
+        '<form id="account-pw" hidden>' +
+          '<label class="meta" for="pw-new">New password</label>' +
+          '<input class="field" id="pw-new" type="password" autocomplete="new-password" minlength="8" required style="' + FIELD + '">' +
+          '<label class="meta" for="pw-again">Type it again</label>' +
+          '<input class="field" id="pw-again" type="password" autocomplete="new-password" minlength="8" required style="' + FIELD + '">' +
+          '<p class="meta" style="margin:0 0 var(--s3)">At least 8 characters.</p>' +
+          '<button class="btn btn--primary btn--block" type="submit">Save new password</button>' +
+          '<button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" type="button" data-hide-pw>Back</button>' +
+        "</form>";
+      document.body.appendChild(scrim); document.body.appendChild(sh);
+      var ctl = sheet("account");
+      var API = window.HoccoAPI;
+
+      var showPw = function (on) {
+        sh.querySelector("#account-main").hidden = on;
+        sh.querySelector("#account-pw").hidden = !on;
+        if (on) {
+          sh.querySelector("#pw-new").value = ""; sh.querySelector("#pw-again").value = "";
+          sh.querySelector("#pw-new").focus();
+        }
+      };
+      sh.querySelector("#account-pw").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var a = sh.querySelector("#pw-new").value, b = sh.querySelector("#pw-again").value;
+        if (a.length < 8) { toast("Use at least 8 characters."); return; }
+        if (a !== b) { toast("The two passwords don’t match."); return; }
+        var btn = e.target.querySelector("[type=submit]");
+        btn.disabled = true;
+        API.changePassword(a).then(function () {
+          btn.disabled = false; showPw(false); ctl.close();
+          toast("Password changed. Use the new one next time you sign in.");
+        }, function (err) { btn.disabled = false; toast(esc(err.message)); });
+      });
+      sh.addEventListener("click", function (e) {
+        if (e.target.closest("[data-show-pw]")) return showPw(true);
+        if (e.target.closest("[data-hide-pw]")) return showPw(false);
+        if (e.target.closest("[data-close-account]")) return ctl.close();
+        var out = e.target.closest("[data-signout]");
+        if (!out) return;
+        out.disabled = true;
+        API.signOut().then(function () {
+          out.disabled = false; ctl.close();
+          if (_account.onSignedOut) _account.onSignedOut();
+        });
+      });
+      _account = { ctl: ctl, el: sh, showPw: showPw };
+    }
+    _account.onSignedOut = onSignedOut || function () { location.href = "index.html"; };
+    _account.el.querySelector("#account-name").textContent = (user.profile && user.profile.full_name) || user.email;
+    _account.el.querySelector("#account-ctx").textContent = (deptName ? deptName + " · " : "") + user.email;
+    _account.showPw(false);
+    _account.ctl.open();
+  }
+  var FIELD = "width:100%;font:inherit;font-size:14.5px;color:var(--ink);background:var(--glass-faint);" +
+              "border:1px solid var(--edge-strong);border-radius:var(--r-md);padding:var(--s3);" +
+              "min-height:44px;margin:4px 0 var(--s3)";
+
   return {
     esc: esc, brandChip: brandChip, stateChip: stateChip, bottomNav: bottomNav,
-    sheet: sheet, toast: toast, filters: filters
+    sheet: sheet, toast: toast, filters: filters, account: account, initials: initials
   };
 })();
