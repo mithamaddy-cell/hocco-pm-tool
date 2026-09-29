@@ -15,5 +15,6 @@ drop policy if exists "TEMP public read" on public.gates;
 drop policy if exists "TEMP public read" on public.gate_reviews;
 drop policy if exists "TEMP public read" on public.track_dependencies;
 drop policy if exists "TEMP public read" on public.blockers;
+drop policy if exists "TEMP public read" on public.gate_rejection_reasons;   -- added in phase4d-gates.sql
 
 commit;
