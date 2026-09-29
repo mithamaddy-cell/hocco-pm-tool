@@ -12,7 +12,13 @@
   .claim .from { color: var(--ink-2); }
   .claim .to   { color: var(--risk); }
   .actions { display: flex; gap: var(--s2); margin-top: var(--s3); }
-  .actions .btn { flex: 1; min-height: 40px; font-size: 13.5px; }
+  .actions .btn { flex: 1; min-height: 44px; font-size: 13.5px; }
+  .sheet__ctx { font-size: 12.5px; color: var(--ink-3); margin: 0 0 var(--s4); }
+  .sheet__h { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 2px; }
+  .field { width: 100%; font: inherit; font-size: 14.5px; color: var(--ink);
+           background: var(--glass-faint); border: 1px solid var(--edge-strong);
+           border-radius: var(--r-md); padding: var(--s3); min-height: 76px; resize: vertical; }
+  .field::placeholder { color: var(--ink-3); }
 </style>
 </head>
 <body>
@@ -23,13 +29,16 @@
     <h1 class="appbar__title">Blockers</h1>
     <div class="appbar__sub" id="sub"></div>
   </div>
-  <a class="iconbtn" href="#" aria-label="Notifications">◔<span class="iconbtn__dot"></span></a>
+  <a class="iconbtn" href="hocco-mywork-mobile.html" aria-label="Notifications (on My Work)">◔</a>
 </header>
 
 <main class="frame screen">
 
   <!-- Filter by the held-up initiative's brand / category / priority. -->
   <div class="filterbar" id="filter-b"></div>
+  <p class="meta" id="signin-hint" style="display:none;margin:0 0 var(--s3);padding:0 var(--s1)">
+    <a class="rowlink" href="hocco-mywork-mobile.html">Sign in on My Work</a> to respond to blockers that involve your department.
+  </p>
 
   <!-- Disputes live here rather than on either party's home screen —
        neutral ground, by design (spec §7). -->
@@ -60,13 +69,27 @@
 
 <div id="nav"></div>
 
+<!-- ===================== DISPUTE SHEET =====================
+     Disputing needs a reply — a claim can't be waved away without one. -->
+<div class="scrim" id="dispute-scrim"></div>
+<div class="sheet" id="dispute" role="dialog" aria-modal="true" aria-labelledby="dispute-title" aria-hidden="true" data-open="false">
+  <div class="sheet__grip" aria-hidden="true"></div>
+  <h2 class="sheet__h" id="dispute-title">Why isn’t it yours?</h2>
+  <p class="sheet__ctx" id="dispute-ctx"></p>
+  <label class="meta" for="dispute-note" style="display:block;margin:0 0 var(--s2)">Your reply</label>
+  <textarea class="field" id="dispute-note" maxlength="300" placeholder="e.g. the dimensions were sent on 2 Aug — see the shared folder"></textarea>
+  <button class="btn btn--primary btn--block" style="margin-top:var(--s3)" id="dispute-send">Send dispute</button>
+  <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-dispute>Cancel</button>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=18"></script>
+<script src="hocco-api.js?v=19"></script>
 <script src="hocco-ui.js?v=12"></script>
 <script>
 (function () {
-  var U = window.UI;
+  var U = window.UI, API = window.HoccoAPI;
+  var D, myDept = null, filterCtl, matchNow = function () { return true; };
   document.getElementById("nav").innerHTML = U.bottomNav("blockers", 0);
 
   /* ---- Loading / error ---- */
@@ -77,32 +100,57 @@
   function start() {
     document.getElementById("sub").textContent = "Loading…";
     message("Loading blockers…");
-    window.HoccoAPI.load().then(render, function (err) {
+    /* Who's looking decides which buttons show; signed out is fine (read-only). */
+    API.me().catch(function () { return null; }).then(function (u) {
+      myDept = u && u.profile ? u.profile.department_id : null;
+      document.getElementById("signin-hint").style.display = myDept ? "none" : "";
+      return API.load();
+    }).then(render, function (err) {
       if (window.console) console.error(err);
       document.getElementById("sub").textContent = "Offline";
       message("Couldn’t reach the database just now. Check your connection and try again." +
               '<div style="margin-top:var(--s3)"><button class="btn btn--ghost" data-retry>Try again</button></div>');
     });
   }
+  function refresh() { return API.load().then(render); }
   document.addEventListener("click", function (e) { if (e.target.closest("[data-retry]")) start(); });
   start();
 
-  function render(D) {
-  var disputed = D.blockers.filter(function (b) { return b.state === "disputed"; });
-  var open     = D.blockers.filter(function (b) { return b.state === "open"; });
+  function render(data) {
+  D = data;
+  var disputed = D.blockers.filter(function (b) { return b.status === "disputed"; });
+  var open     = D.blockers.filter(function (b) { return b.status !== "disputed"; });
 
   document.getElementById("sub").textContent = D.blockers.length + " open · " + disputed.length + " disputed";
   document.getElementById("nav").innerHTML = U.bottomNav("blockers", disputed.length);
-  document.getElementById("cd").textContent = disputed.length;
-  document.getElementById("co").textContent = open.length;
 
   /* Blocker → the initiative it is holding up. */
   var INIT_ID = {};
   D.initiatives.forEach(function (i) { INIT_ID[i.name] = i.id; });
 
+  /* Buttons depend on who's looking: the named department answers the
+     claim; the department that raised it resolves it. */
+  function actions(b) {
+    if (myDept && myDept === b.againstId && b.status === "open") {
+      return '<div class="actions"><button class="btn btn--primary" data-ack="' + b.id + '">Acknowledge</button>' +
+             '<button class="btn btn--ghost" data-dispute="' + b.id + '">This isn’t ours</button></div>';
+    }
+    if (myDept && myDept === b.againstId && b.status === "disputed") {
+      return '<div class="actions"><button class="btn btn--primary" data-ack="' + b.id + '">Acknowledge after all</button></div>';
+    }
+    if (myDept && myDept === b.raisedById) {
+      return '<div class="actions"><button class="btn btn--primary" data-resolve="' + b.id + '">Resolve</button></div>';
+    }
+    return "";
+  }
+
   function card(b) {
     var tier = b.state === "disputed" ? "surface" : "present";
     var icon = b.state === "disputed" ? '<span class="ico" aria-hidden="true">▲</span>' : "";
+    var status = b.status === "disputed"
+        ? b.against + " says it isn’t theirs" + (b.disputeNote ? ": “" + b.disputeNote + "”" : "")
+      : b.status === "open" ? "Waiting for " + b.against + " to respond"
+      : "";
     return '<div class="row row--' + tier + '">' +
       '<div class="row__head"><span class="row__title">' + U.esc(b.title) + "</span>" +
       '<span class="row__label num">' + b.days + " days</span></div>" +
@@ -112,15 +160,13 @@
         '<span class="' + (b.state === "disputed" ? "to" : "from") + '">' + U.esc(b.against) + "</span>" +
       "</div>" +
       '<div class="row__reason" style="margin-top:6px">' + U.esc(b.note) + "</div>" +
+      (status ? '<div class="meta" style="margin-top:4px">' + U.esc(status) + "</div>" : "") +
       '<div class="row__foot"><span class="chip chip--init">' + U.esc(b.initiative) + "</span>" +
         (b.state === "disputed" ? U.stateChip("Disputed") : "") +
         '<a class="rowlink" href="hocco-initiative-detail.html?id=' +
           encodeURIComponent(INIT_ID[b.initiative] || "") + '">View initiative →</a>' +
       "</div>" +
-      (b.state === "disputed"
-        ? '<div class="actions"><button class="btn btn--primary" data-ack>Acknowledge</button>' +
-          '<button class="btn btn--ghost" data-dispute>This isn’t ours</button></div>'
-        : "") +
+      actions(b) +
     "</div>";
   }
 
@@ -128,6 +174,7 @@
   function initOf(b) { return D.byName[b.initiative] || D.byId[INIT_ID[b.initiative]] || null; }
 
   function renderLists(matchFn) {
+    matchNow = matchFn;
     var d = disputed.filter(function (b) { return matchFn(initOf(b)); });
     var o = open.filter(function (b) { return matchFn(initOf(b)); });
     document.getElementById("cd").textContent = d.length;
@@ -138,21 +185,62 @@
     document.getElementById("open").innerHTML = o.length ? o.map(card).join("")
       : '<div class="emptyfilter">' + (open.length ? "No open blockers match the filter." : "No open blockers right now.") + "</div>";
   }
-  renderLists(function () { return true; });
-  U.filters(document.getElementById("filter-b"), renderLists);
+  renderLists(matchNow);
+  if (!filterCtl) filterCtl = U.filters(document.getElementById("filter-b"), renderLists);
   }
 
+  /* ---- Responses: saved by the database, which checks who may do what ---- */
+  function respond(id, action, note, okMsg) {
+    return API.respondToBlocker(id, action, note).then(function () {
+      U.toast(okMsg);
+      return refresh();
+    }, function (err) { U.toast(U.esc(err.message)); throw err; });
+  }
+
+  var disputeSheet = U.sheet("dispute");
+  var disputing = null;
+
   document.body.addEventListener("click", function (e) {
-    if (e.target.closest("[data-ack]")) {
-      var row = e.target.closest(".row");
-      row.classList.replace("row--surface", "row--present");
-      row.querySelector(".actions").remove();
-      row.querySelector(".row__reason").textContent = "Acknowledged just now. Escalation cancelled.";
-      U.toast("Acknowledged. The clock keeps running on the step, not on you.");
+    var ack = e.target.closest("[data-ack]");
+    if (ack) {
+      ack.disabled = true;
+      respond(ack.dataset.ack, "acknowledge", null,
+              "Acknowledged. The clock keeps running on the step, not on you.")
+        .catch(function () { ack.disabled = false; });
+      return;
     }
-    if (e.target.closest("[data-dispute]")) {
-      U.toast("Marked as disputed. Both HODs will see it — neither is asked to take a side.");
+    var dis = e.target.closest("[data-dispute]");
+    if (dis) {
+      disputing = dis.dataset.dispute;
+      var b = D.blockers.filter(function (x) { return x.id === disputing; })[0] || {};
+      document.getElementById("dispute-ctx").textContent =
+        "“" + (b.title || "") + "” · raised by " + (b.raisedBy || "") + ". Both HODs will see it — neither is asked to take a side.";
+      document.getElementById("dispute-note").value = "";
+      disputeSheet.open();
+      return;
     }
+    var res = e.target.closest("[data-resolve]");
+    if (res) {
+      var rb = D.blockers.filter(function (x) { return x.id === res.dataset.resolve; })[0] || {};
+      if (!window.confirm("Resolve “" + rb.title + "”? Your stage goes back to in progress.")) return;
+      res.disabled = true;
+      respond(res.dataset.resolve, "resolve", null, "Resolved. " + U.esc(rb.against || "They") + " have been told.")
+        .catch(function () { res.disabled = false; });
+    }
+  });
+
+  disputeSheet.el.addEventListener("click", function (e) {
+    if (e.target.closest("[data-close-dispute]")) disputeSheet.close();
+  });
+  document.getElementById("dispute-send").addEventListener("click", function () {
+    var note = document.getElementById("dispute-note").value.trim();
+    if (!note) { U.toast("Add a reply saying why it isn’t yours."); document.getElementById("dispute-note").focus(); return; }
+    var btn = this;
+    btn.disabled = true;
+    respond(disputing, "dispute", note,
+            "Marked as disputed. Both HODs will see it — neither is asked to take a side.")
+      .then(function () { btn.disabled = false; disputeSheet.close(); },
+            function () { btn.disabled = false; });
   });
 })();
 </script>

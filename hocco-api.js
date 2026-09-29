@@ -87,6 +87,9 @@ window.HoccoAPI = (function () {
       });
   }
   function markNotificationsRead() { return rpc("mark_notifications_read", {}); }
+  function respondToBlocker(blockerId, action, note) {
+    return rpc("respond_to_blocker", { p_blocker_id: blockerId, p_action: action, p_note: note || null });
+  }
 
   /* ---- Dates -------------------------------------------------------------- */
   function todayDate() {
@@ -197,7 +200,7 @@ window.HoccoAPI = (function () {
       q("stages",       "id, track_id, name, position, department_id, second_department_id, status, note, closed_on, closed_at, unblocked_at, last_update_on"),
       q("gates",        "id, track_id, name, after_stage_position, status"),
       q("gate_reviews", "gate_id, revision, outcome, reviewer_department_id, reason, note, flags, reviewed_on"),
-      q("blockers",     "id, initiative_id, title, raised_by_department_id, against_department_id, status, raised_on, note"),
+      q("blockers",     "id, initiative_id, title, raised_by_department_id, against_department_id, status, raised_on, acknowledged_on, note, dispute_note"),
       q("track_dependencies", "blocking_track_id, blocked_track_id, critical, note"),
       q("blocker_reasons", "id, label, sort_order")
     ]).then(function (r) {
@@ -288,6 +291,10 @@ window.HoccoAPI = (function () {
       return {
         id: b.id, title: b.title, initiative: (byUuid[b.initiative_id] || {}).name,
         raisedBy: dept(b.raised_by_department_id), against: dept(b.against_department_id),
+        raisedById: b.raised_by_department_id, againstId: b.against_department_id,
+        status: b.status,                       /* open | acknowledged | disputed */
+        acknowledgedOn: b.acknowledged_on ? shortDate(b.acknowledged_on) : null,
+        disputeNote: b.dispute_note || "",
         days: b.days, state: b.status === "disputed" ? "disputed" : "open", note: b.note || ""
       };
     });
@@ -638,5 +645,6 @@ window.HoccoAPI = (function () {
   }
 
   return { load: load, me: me, signIn: signIn, signOut: signOut, setStageStatus: setStageStatus,
-           raiseBlocker: raiseBlocker, notifications: notifications, markNotificationsRead: markNotificationsRead };
+           raiseBlocker: raiseBlocker, notifications: notifications, markNotificationsRead: markNotificationsRead,
+           respondToBlocker: respondToBlocker };
 })();
