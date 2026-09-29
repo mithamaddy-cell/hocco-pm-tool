@@ -154,17 +154,66 @@
 
 <div id="nav"></div>
 
-<script src="hocco-data.js?v=12"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="hocco-config.js?v=13"></script>
+<script src="hocco-api.js?v=15"></script>
 <script src="hocco-ui.js?v=12"></script>
 <script>
 (function () {
-  var D = window.HOCCO, U = window.UI;
-
-  /* Any initiative can be opened by id. The hero returns its hand-modelled
-     graph; everything else is composed from its template (spec §6). */
+  var U = window.UI;
   var id = new URLSearchParams(location.search).get("id");
-  var K = D.getInitiative(id);
-  var isHero = !K.synthesized;
+
+  /* ---- Tabs and Back work straight away, even while data loads ---- */
+  var tabs = [].slice.call(document.querySelectorAll(".tab"));
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () {
+      tabs.forEach(function (x) { x.setAttribute("aria-selected", String(x === t)); });
+      document.querySelectorAll(".panel").forEach(function (p) {
+        p.setAttribute("data-active", String(p.id === "p-" + t.dataset.panel));
+      });
+    });
+  });
+  /* Back goes where you actually came from — My Work and Blockers both reach
+     this screen now, so a hardcoded return to Portfolio would be a dead end. */
+  document.getElementById("back").addEventListener("click", function (e) {
+    if (document.referrer && history.length > 1) { e.preventDefault(); history.back(); }
+  });
+
+  /* ---- Loading / error / not-found ---- */
+  function message(html) {
+    document.getElementById("tracks").innerHTML = '<div class="emptyfilter" role="status">' + html + "</div>";
+  }
+  var glance = document.querySelector(".glance");
+  function start() {
+    glance.hidden = true;           /* shown once there's an initiative to fill it */
+    document.getElementById("bar-sub").textContent = "Loading…";
+    message("Loading initiative…");
+    window.HoccoAPI.load().then(function (D) {
+      var K = D.getInitiative(id);
+      if (!K) {
+        document.getElementById("bar-sub").textContent = "";
+        message("This initiative couldn’t be found. It may have been removed." +
+                '<div style="margin-top:var(--s3)"><a class="btn btn--ghost" href="hocco-portfolio-mobile.html">Back to Portfolio</a></div>');
+        return;
+      }
+      render(D, K);
+    }, function (err) {
+      if (window.console) console.error(err);
+      document.getElementById("bar-sub").textContent = "Offline";
+      message("Couldn’t reach the database just now. Check your connection and try again." +
+              '<div style="margin-top:var(--s3)"><button class="btn btn--ghost" data-retry>Try again</button></div>');
+    });
+  }
+  document.addEventListener("click", function (e) { if (e.target.closest("[data-retry]")) start(); });
+  document.getElementById("nav").innerHTML = U.bottomNav("portfolio", 0);
+  start();
+
+  function render(D, K) {
+  /* Initiatives with tracks in the database show real data; the rest are
+     composed from their template (spec §6) until their tracks are added. */
+  var real = !K.synthesized;
+  glance.hidden = false;
+  var disputed = D.blockers.filter(function (b) { return b.state === "disputed"; }).length;
 
   document.title = K.name + " — Hocco PM";
   document.getElementById("bar-name").textContent = K.name;
@@ -173,7 +222,7 @@
   document.getElementById("g-name").textContent = K.name;
   document.getElementById("gowner").textContent = "Owner: " + K.owner;
 
-  document.getElementById("nav").innerHTML = U.bottomNav("portfolio", 1);
+  document.getElementById("nav").innerHTML = U.bottomNav("portfolio", disputed);
   document.getElementById("gchips").innerHTML =
     U.stateChip(K.state || "Blocked") + U.brandChip(K.brand) +
     '<span class="chip chip--init">' + U.esc(K.type) + "</span>";
@@ -190,9 +239,12 @@
   /* The diagnosis line. Troubled initiatives surface their own problem;
      healthy ones stay quiet rather than inventing drama (spec §3). */
   var diag = document.getElementById("gdiag");
-  if (isHero) {
-    diag.innerHTML = "▲ Stuck at <b>Packaging · Artwork Approval</b> — 3rd revision, and the same " +
-      "reason twice. On current evidence, expect launch to slip to <b>23 Sep</b>.";
+  if (K.stuck) {
+    var st = K.stuck;
+    var times = st.sameReason === 2 ? "twice" : st.sameReason + " times";
+    diag.innerHTML = "▲ Stuck at <b>" + U.esc(st.track) + " · " + U.esc(st.gate) + "</b> — " +
+      ordinal(st.revisions) + " revision" + (st.sameReason ? ", and the same reason " + times : "") + "." +
+      (K.projected ? " On current evidence, expect launch to slip to <b>" + U.esc(K.projected) + "</b>." : "");
   } else if (K.band === "risk") {
     diag.innerHTML = "▲ " + U.esc(K.reason) + ".";
   } else if (K.band === "pending") {
@@ -221,11 +273,16 @@
       (b.blocked ? '<span class="legend__item"><i class="legend__sw" style="background:var(--risk)"></i>Blocked ' + b.blocked + "</span>" : "")
     : "";
 
-  document.getElementById("bd-rows").innerHTML = isHero
-    ? '<div class="bd__row" style="border-top:0"><span>Packaging · Artwork Approval loop</span><b class="num">11 days</b></div>' +
-      '<div class="bd__row"><span>Codes/BOM queued behind Packaging</span><b class="num">6 days</b></div>' +
-      '<div class="bd__row"><span>Recipe · sensory panel scheduling</span><b class="num">4 days</b></div>' +
-      '<div class="bd__row"><span>Procurement · quote turnaround</span><b class="num">3 days</b></div>'
+  /* Real initiatives: time lost to each open blocker (a step, never a person).
+     A fuller breakdown needs the activity log, which fills from Phase 4. */
+  document.getElementById("bd-rows").innerHTML = real
+    ? (K.blockers.length
+        ? K.blockers.map(function (bl, i) {
+            return '<div class="bd__row"' + (i === 0 ? ' style="border-top:0"' : "") + "><span>" +
+              U.esc(bl.title) + " · waiting on " + U.esc(bl.against) +
+              '</span><b class="num">' + bl.days + " day" + (bl.days === 1 ? "" : "s") + "</b></div>";
+          }).join("")
+        : '<div class="bd__row" style="border-top:0"><span>No blocked time recorded yet</span></div>')
     : (tot
         ? K.tracks.map(function (t, i) {
             var d = t.state === "blocked" ? Math.max(2, K.late) : (t.state === "queued" ? 2 : 1);
@@ -237,16 +294,8 @@
 
   /* Timeline. The hero has a real rework rhythm to show; others get the
      progression their template has actually reached. */
-  document.getElementById("tl").innerHTML = isHero
-    ? [
-        ["good", "9 Jul",  "Initiative created", "Prioritised by CEO the same day"],
-        ["good", "18 Jul", "Structural spec closed", "Supply Chain → Marketing handoff"],
-        ["bad",  "22 Jul", "Artwork Approval rejected — rev 1", "Statutory declarations incorrect"],
-        ["bad",  "30 Jul", "Artwork Approval rejected — rev 2", "Same reason as rev 1 · flagged"],
-        ["good", "4 Aug",  "Recipe signed off", "Spec revised at sign-off — changed the nutritional panel"],
-        ["bad",  "6 Aug",  "Artwork Approval rejected — rev 3", "Nutritional panel mismatch · upstream-caused"],
-        ["",     "Today",  "Artwork v4 due", "Codes/BOM has been queued behind this for 6 days"]
-      ].map(tlItem).join("")
+  document.getElementById("tl").innerHTML = real
+    ? K.timeline.map(function (e) { return tlItem([e.k, e.d, e.t, e.s]); }).join("")
     : K.band === "pending"
       ? tlItem(["", "Created", "Initiative created", "Sitting in Awaiting Prioritisation"])
       : K.tracks.reduce(function (acc, t) {
@@ -298,7 +347,7 @@
           r.flags.map(function (f) {
             return f === "repeat"
               ? '<span class="flag flag--repeat">▲ Same reason as rev ' + (r.rev - 1) + " — a communication failure, not a skill one</span>"
-              : '<span class="flag flag--upstream">Upstream-caused — the recipe spec changed on 4 Aug</span>';
+              : '<span class="flag flag--upstream">Upstream-caused — a change in another track</span>';
           }).join(" ") +
         "</div>";
       }).join("") +
@@ -356,15 +405,10 @@
 
   /* ---- Files: aggregated to initiative level, context preserved ---- */
   var slug = K.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  var files = isHero
-    ? [
-        { n: "mango-kulfi-750-artwork-v3.pdf", m: "Packaging · Artwork Approval rev 3 · rejected 6 Aug", s: "bad" },
-        { n: "mango-kulfi-750-artwork-v2.pdf", m: "Packaging · Artwork Approval rev 2 · rejected 30 Jul", s: "bad" },
-        { n: "mango-kulfi-750-artwork-v1.pdf", m: "Packaging · Artwork Approval rev 1 · rejected 22 Jul", s: "bad" },
-        { n: "recipe-signoff-approved.pdf",    m: "Recipe · Recipe sign-off · approved 4 Aug", s: "good" },
-        { n: "structural-spec-final.pdf",      m: "Packaging · Structural spec · approved 18 Jul", s: "good" },
-        { n: "laminate-quote-comparison.xlsx", m: "Procurement · Laminate sourcing · uploaded 9 Aug", s: "" }
-      ]
+  /* Real initiatives: files arrive with Supabase Storage (approval PDFs) in a
+     later phase — until then the honest empty state shows. */
+  var files = real
+    ? []
     : K.tracks.reduce(function (acc, t) {
         t.stages.forEach(function (s) {
           if (s.state === "done") {
@@ -389,23 +433,12 @@
       '<span style="min-width:0"><span class="file__n">' + U.esc(f.n) + "</span>" +
       '<div class="file__m">' + U.esc(f.m) + "</div></span></div>";
   }).join("");
+  }
 
-  /* Back goes where you actually came from — My Work and Blockers both reach
-     this screen now, so a hardcoded return to Portfolio would be a dead end. */
-  document.getElementById("back").addEventListener("click", function (e) {
-    if (document.referrer && history.length > 1) { e.preventDefault(); history.back(); }
-  });
-
-  /* ---- Tabs ---- */
-  var tabs = [].slice.call(document.querySelectorAll(".tab"));
-  tabs.forEach(function (t) {
-    t.addEventListener("click", function () {
-      tabs.forEach(function (x) { x.setAttribute("aria-selected", String(x === t)); });
-      document.querySelectorAll(".panel").forEach(function (p) {
-        p.setAttribute("data-active", String(p.id === "p-" + t.dataset.panel));
-      });
-    });
-  });
+  function ordinal(n) {
+    var s = ["th", "st", "nd", "rd"], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
 })();
 </script>
 </body>

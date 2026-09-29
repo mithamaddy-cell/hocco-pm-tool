@@ -137,16 +137,17 @@ window.HoccoAPI = (function () {
     }
 
     return Promise.all([
-      q("initiatives",  "id, slug, name, type, brand_code, priority, launch_on, late_days"),
+      q("initiatives",  "id, slug, name, type, brand_code, owner_department_id, priority, launch_on, late_days, started_on, created_at, days_working, days_waiting, days_blocked"),
       q("departments",  "id, name, sort_order"),
-      q("tracks",       "id, initiative_id"),
-      q("stages",       "id, track_id, name, department_id, second_department_id, status, last_update_on"),
-      q("gates",        "id, track_id, name, status"),
-      q("gate_reviews", "gate_id, revision, outcome, flags"),
-      q("blockers",     "id, initiative_id, title, raised_by_department_id, against_department_id, status, raised_on, note")
+      q("tracks",       "id, initiative_id, slug, name, department_id, position, status, summary"),
+      q("stages",       "id, track_id, name, position, department_id, second_department_id, status, note, closed_on, last_update_on"),
+      q("gates",        "id, track_id, name, after_stage_position, status"),
+      q("gate_reviews", "gate_id, revision, outcome, reviewer_department_id, reason, note, flags, reviewed_on"),
+      q("blockers",     "id, initiative_id, title, raised_by_department_id, against_department_id, status, raised_on, note"),
+      q("track_dependencies", "blocking_track_id, blocked_track_id, critical, note")
     ]).then(function (r) {
       return build({ initiatives: r[0], departments: r[1], tracks: r[2], stages: r[3],
-                     gates: r[4], reviews: r[5], blockers: r[6] });
+                     gates: r[4], reviews: r[5], blockers: r[6], deps: r[7] });
     });
   }
 
@@ -243,8 +244,143 @@ window.HoccoAPI = (function () {
     });
     categories.sort();
 
+    /* ---- One initiative in the Initiative Detail shape ------------------- */
+    var rowBySlug = {};
+    db.initiatives.forEach(function (i) { rowBySlug[i.slug] = i; });
+    var tracksByInit = group(db.tracks, function (t) { return t.initiative_id; });
+    var stagesByTrack = group(db.stages, function (s) { return s.track_id; });
+    var gatesByTrack = group(db.gates, function (g) { return g.track_id; });
+    var trackById = {};
+    db.tracks.forEach(function (t) { trackById[t.id] = t; });
+
+    function getInitiative(slug) {
+      var row = rowBySlug[slug], summary = byId[slug];
+      if (!row || !summary) return null;
+      var tracks = (tracksByInit[row.id] || []).sort(function (a, b) { return a.position - b.position; });
+      if (!tracks.length) return synthesize(row, summary, dept, today);
+
+      var started = row.started_on ? parseDate(row.started_on) : null;
+      var stuck = null, events = [];
+
+      if (started) events.push({ d: row.started_on, k: "good", t: "Initiative created", s: "Work started" });
+
+      var outTracks = tracks.map(function (t) {
+        var stages = (stagesByTrack[t.id] || []).sort(function (a, b) { return a.position - b.position; });
+        var gates = gatesByTrack[t.id] || [];
+        var incoming = db.deps.filter(function (d) { return d.blocked_track_id === t.id; });
+        var outgoing = db.deps.filter(function (d) { return d.blocking_track_id === t.id; });
+        var firstOpen = stages.filter(function (s) { return s.status !== "done"; })[0];
+
+        /* Progress strip: a segment per stage, a gate after the flagged stages. */
+        var strip = [];
+        stages.forEach(function (s) {
+          var k = s.status === "done" ? "done" : s.status === "blocked" ? "blocked"
+                : s.status === "working" ? "active"
+                : (s === firstOpen && incoming.length ? "wait" : "");
+          strip.push({ t: "seg", k: k });
+          gates.forEach(function (g) {
+            if (g.after_stage_position !== s.position) return;
+            var rej = g.reviews.filter(function (r) { return r.outcome === "rejected"; }).length;
+            strip.push({ t: "gate", k: g.status, rev: g.status === "failed" && rej ? rej : undefined });
+          });
+        });
+
+        /* Gate card: only for a gate that has been rejected and not passed. */
+        var failed = gates.filter(function (g) { return g.status === "failed"; })[0];
+        var gate = null;
+        if (failed) {
+          var rejections = failed.reviews.filter(function (r) { return r.outcome === "rejected"; });
+          var repeats = rejections.filter(function (r) { return (r.flags || []).indexOf("repeat") > -1; }).length;
+          gate = {
+            name: failed.name, revisions: rejections.length,
+            repeatFlag: repeats > 0,
+            upstreamFlag: rejections.some(function (r) { return (r.flags || []).indexOf("upstream") > -1; }),
+            history: rejections.map(function (r) {
+              return { rev: r.revision, date: shortDate(r.reviewed_on), by: dept(r.reviewer_department_id),
+                       reason: r.reason || "", note: r.note || "", flags: r.flags || [] };
+            })
+          };
+          if (t.status === "blocked" && !stuck) {
+            stuck = { track: t.name, gate: failed.name, revisions: rejections.length, sameReason: repeats ? repeats + 1 : 0 };
+          }
+        }
+
+        /* Timeline events from real dates. */
+        stages.forEach(function (s) {
+          if (s.closed_on) {
+            /* The date is shown already — keep only what the note adds. */
+            var extra = (s.note || "").replace(/^Closed \d+ \w+\s*(—\s*)?/, "");
+            events.push({ d: s.closed_on, k: "good", t: s.name + " closed", s: t.name + (extra ? " · " + extra : "") });
+          }
+        });
+        gates.forEach(function (g) {
+          g.reviews.forEach(function (r) {
+            var flags = (r.flags || []).map(function (f) {
+              return f === "repeat" ? "Same reason as rev " + (r.revision - 1) + " · flagged" : "Upstream-caused";
+            });
+            events.push({
+              d: r.reviewed_on, k: r.outcome === "rejected" ? "bad" : "good",
+              t: g.name + " " + r.outcome + " — rev " + r.revision,
+              s: [r.reason].concat(flags).filter(Boolean).join(" · ")
+            });
+          });
+        });
+
+        var deps = outgoing.map(function (d) {
+          return { critical: d.critical, text: "Blocks → " + (d.note || (trackById[d.blocked_track_id] || {}).name) };
+        }).concat(incoming.map(function (d) {
+          var from = trackById[d.blocking_track_id] || {};
+          var fg = (gatesByTrack[from.id] || []).filter(function (g) { return g.status !== "passed"; })[0];
+          return { critical: false, text: "Depends on → " + from.name + (fg ? " · " + fg.name : "") };
+        }));
+
+        return {
+          id: t.slug, name: t.name, dept: dept(t.department_id), state: t.status,
+          summary: t.summary || "", strip: strip, deps: deps, gate: gate,
+          stages: stages.map(function (s) {
+            return { name: s.name,
+                     who: dept(s.department_id) + (s.second_department_id ? " + " + dept(s.second_department_id) : ""),
+                     state: s.status, note: s.note || "" };
+          })
+        };
+      });
+
+      /* What's open right now closes the timeline. */
+      db.stages.forEach(function (s) {
+        if (trackInit[s.track_id] === row.id && s.status === "blocked") {
+          events.push({ d: null, k: "", t: s.name + " — " + (s.note || "blocked"),
+                        s: (trackById[s.track_id] || {}).name + " · blocked now" });
+        }
+      });
+      events.sort(function (a, b) { return !a.d ? 1 : !b.d ? -1 : (a.d < b.d ? -1 : a.d > b.d ? 1 : 0); });
+
+      var late = row.late_days || 0;
+      var projected = null;
+      if (row.launch_on && late) {
+        var p = parseDate(row.launch_on); p.setDate(p.getDate() + late);
+        projected = p.getDate() + " " + MONTHS[p.getMonth()];
+      }
+
+      return {
+        id: slug, name: row.name, type: row.type, brand: row.brand_code,
+        owner: dept(row.owner_department_id),
+        launch: row.launch_on ? longDate(parseDate(row.launch_on)) : "Not set",
+        elapsed: started ? daysBetween(started, today) : 0,
+        late: late,
+        reason: summary.reason, state: summary.state, band: summary.band,
+        stuck: stuck, projected: projected,
+        breakdown: { working: row.days_working || 0, waiting: row.days_waiting || 0, blocked: row.days_blocked || 0 },
+        timeline: events.map(function (e) { return { k: e.k, d: e.d ? shortDate(e.d) : "Today", t: e.t, s: e.s }; }),
+        blockers: (blockersByInit[row.id] || []).map(function (b) {
+          return { title: b.title, against: dept(b.against_department_id), days: b.days, status: b.status };
+        }),
+        tracks: outTracks
+      };
+    }
+
     var data = {
       today: longDate(today),
+      getInitiative: getInitiative,
       initiatives: initiatives,
       departments: departments,
       blockers: blockers,
@@ -264,6 +400,84 @@ window.HoccoAPI = (function () {
     };
     window.HOCCO = data;
     return data;
+  }
+
+  /* ---- Template fallback --------------------------------------------------
+     Only Mango Kulfi has its tracks in the database so far. Any other
+     initiative is drawn from its template (same as the prototype), marked
+     synthesized: true, until its real tracks are added. */
+  var TEMPLATES = {
+    "NPD": [
+      { name: "Recipe",      dept: "R&D",          stages: ["Concept & benchmark", "Trial batch 1", "Sensory panel", "Trial batch 2", "Recipe sign-off"], gateAfter: [2, 4] },
+      { name: "Packaging",   dept: "Marketing",    stages: ["Structural spec", "Key visual", "Artwork production", "Vendor proof"],                      gateAfter: [2] },
+      { name: "Codes / BOM", dept: "Supply Chain", stages: ["SKU creation", "BOM finalisation", "Costing sign-off"],                                     gateAfter: [1] },
+      { name: "Procurement", dept: "Procurement",  stages: ["Vendor shortlist", "Material sourcing", "PO release"],                                      gateAfter: [1] }
+    ],
+    "Seasonal (FOM)": [
+      { name: "Recipe",    dept: "R&D",       stages: ["Flavour concept", "Trial batch", "Recipe sign-off"],       gateAfter: [1] },
+      { name: "Campaign",  dept: "Marketing", stages: ["Campaign brief", "Key visual", "Channel plan", "Go-live"], gateAfter: [1] },
+      { name: "Packaging", dept: "Marketing", stages: ["Artwork adaptation", "Vendor proof"],                       gateAfter: [0] }
+    ],
+    "Packaging redesign": [
+      { name: "Packaging", dept: "Marketing", stages: ["Structural spec", "Key visual", "Artwork production", "Vendor proof", "Print release"], gateAfter: [2] }
+    ],
+    "Price revision": [
+      { name: "Approval chain", dept: "Finance", stages: ["Costing input", "Finance review", "CEO approval", "Trade communication"], gateAfter: [1, 2] }
+    ],
+    "Volume update": [
+      { name: "Approval chain", dept: "Supply Chain", stages: ["Pack spec change", "BOM update", "Costing sign-off", "Production release"], gateAfter: [1, 2] }
+    ]
+  };
+
+  function synthesize(row, init, dept, today) {
+    var shape = TEMPLATES[init.type] || TEMPLATES["Packaging redesign"];
+    var pending = init.band === "pending";
+    var progress = pending ? 0 : (init.band === "risk" ? 0.55 : 0.45);
+    var blockedTrack = init.band === "risk" ? Math.min(1, shape.length - 1) : -1;
+
+    var tracks = shape.map(function (t, ti) {
+      var done = Math.floor(t.stages.length * progress);
+      var blocked = ti === blockedTrack;
+      var state = pending ? "queued" : blocked ? "blocked" : (done >= t.stages.length ? "done" : "working");
+      var stages = t.stages.map(function (name, si) {
+        var st = si < done ? "done" : (blocked && si === done) ? "blocked"
+               : si === done ? (pending ? "queued" : "working") : "queued";
+        return { name: name, who: t.dept, state: st,
+                 note: st === "done" ? "Closed" : st === "blocked" ? init.reason
+                     : st === "working" ? "In progress" : "Not yet actionable" };
+      });
+      var strip = [];
+      t.stages.forEach(function (_, si) {
+        var k = si < done ? "done" : (blocked && si === done) ? "blocked" : si === done && !pending ? "active" : "";
+        strip.push({ t: "seg", k: k });
+        if (t.gateAfter.indexOf(si) > -1) {
+          strip.push({ t: "gate", k: si < done ? "passed" : (blocked ? "failed" : "pending") });
+        }
+      });
+      return {
+        id: t.name.toLowerCase().replace(/[^a-z]+/g, "-"), name: t.name, dept: t.dept, state: state,
+        summary: pending ? "Not started — awaiting prioritisation" : blocked ? init.reason
+               : state === "done" ? "All stages complete" : done + " of " + t.stages.length + " stages complete",
+        strip: strip, stages: stages,
+        deps: blocked && shape.length > 1
+          ? [{ critical: true, text: "Blocks → downstream tracks cannot close until this clears." }]
+          : (ti > 0 && shape.length > 1 ? [{ critical: false, text: "Depends on → " + shape[0].name }] : []),
+        gate: null
+      };
+    });
+
+    var late = init.late || 0;
+    return {
+      id: init.id, name: init.name, type: init.type, brand: init.brand,
+      owner: dept(row.owner_department_id),
+      launch: init.launch === "—" ? "Not set" : init.launch + " " + today.getFullYear(),
+      elapsed: pending ? 0 : 12 + late,
+      late: late, reason: init.reason, state: init.state, band: init.band,
+      synthesized: true,
+      breakdown: pending ? { working: 0, waiting: 0, blocked: 0 }
+                         : { working: 12, waiting: Math.max(2, late), blocked: init.band === "risk" ? Math.ceil(late / 2) : 0 },
+      tracks: tracks
+    };
   }
 
   return { load: load };
