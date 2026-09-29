@@ -157,6 +157,19 @@
   </div>
 </div>
 
+<!-- ===================== ACCOUNT MENU ===================== -->
+<div class="scrim" id="account-scrim"></div>
+<div class="sheet" id="account" role="dialog" aria-modal="true" aria-labelledby="account-name" aria-hidden="true" data-open="false">
+  <div class="sheet__grip" aria-hidden="true"></div>
+  <h2 class="sheet__h" id="account-name"></h2>
+  <p class="sheet__ctx" id="account-ctx"></p>
+  <p class="meta" style="margin:0 0 var(--s4)">
+    Passwords are temporary while we test. Soon you’ll sign in with a link sent to your email — nothing to remember or change.
+  </p>
+  <button class="btn btn--primary btn--block" data-signout>Sign out</button>
+  <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-account>Close</button>
+</div>
+
 <!-- ===================== NOTIFICATIONS SHEET =====================
      Addressed to your department — nobody else sees these. -->
 <div class="scrim" id="notif-scrim"></div>
@@ -243,12 +256,31 @@
     e.target.querySelector("button").textContent = "Signing in…";
     API.signIn(email, pw).then(start, function (err) { showSignIn(err.message); });
   });
+  /* ---- Account menu: who you're signed in as, and Sign out ---- */
+  var accountSheet = U.sheet("account");
   document.getElementById("avatar").addEventListener("click", function (e) {
     e.preventDefault();
-    if (!user) return;
-    if (window.confirm("Sign out of " + ((user.profile && user.profile.full_name) || user.email) + "?")) {
-      API.signOut().then(start);
+    if (!user) {                        /* signed out: take them to the sign-in form */
+      var f = document.getElementById("si-email");
+      if (f) f.focus();
+      return;
     }
+    document.getElementById("account-name").textContent = (user.profile && user.profile.full_name) || user.email;
+    document.getElementById("account-ctx").textContent =
+      (meDept && meDept.name ? meDept.name + " · " : "") + user.email;
+    accountSheet.open();
+  });
+  accountSheet.el.addEventListener("click", function (e) {
+    if (e.target.closest("[data-close-account]")) return accountSheet.close();
+    var out = e.target.closest("[data-signout]");
+    if (!out) return;
+    out.disabled = true;
+    API.signOut().then(function () {
+      out.disabled = false;
+      accountSheet.close();
+      U.toast("Signed out.");
+      start();
+    });
   });
   document.addEventListener("click", function (e) { if (e.target.closest("[data-retry]")) start(); });
   start();
