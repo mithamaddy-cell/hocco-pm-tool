@@ -11,3 +11,4 @@
 
 # Private local files (test passwords etc.) — never commit
 *.local.*
+dist/

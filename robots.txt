@@ -1,0 +1,3 @@
+# Internal tool — please don't list it in search engines.
+User-agent: *
+Disallow: /
