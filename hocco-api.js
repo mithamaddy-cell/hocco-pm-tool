@@ -53,7 +53,14 @@ window.HoccoAPI = (function () {
   }
   function signIn(email, password) {
     return client().auth.signInWithPassword({ email: email, password: password }).then(function (res) {
-      if (res.error) throw new Error("That email and password don't match a test user.");
+      if (res.error) {
+        /* Say which problem it is — one generic message hides the fix. */
+        var m = String(res.error.message || "");
+        if (/invalid login credentials/i.test(m)) throw new Error("Wrong email or password. Check both — passwords are case-sensitive.");
+        if (/email not confirmed/i.test(m)) throw new Error("This user isn't confirmed yet. In Supabase → Authentication → Users, open the user and confirm them (or re-create with Auto Confirm ticked).");
+        if (/rate limit|too many/i.test(m)) throw new Error("Too many attempts. Wait a minute and try again.");
+        throw new Error("Couldn't sign in: " + m);
+      }
       return me();
     });
   }
