@@ -79,6 +79,14 @@
   .file__m { font-size: 11.5px; color: var(--ink-3); }
 
   .panel { display: none; } .panel[data-active="true"] { display: block; }
+  .actions { display: flex; gap: var(--s2); margin-top: var(--s3); }
+  .actions .btn { flex: 1; min-height: 44px; font-size: 13.5px; }
+  .sheet__ctx { font-size: 12.5px; color: var(--ink-3); margin: 0 0 var(--s4); }
+  .sheet__h { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 2px; }
+  .field { width: 100%; font: inherit; font-size: 14.5px; color: var(--ink);
+           background: var(--glass-faint); border: 1px solid var(--edge-strong);
+           border-radius: var(--r-md); padding: var(--s3); min-height: 76px; resize: vertical; }
+  .field::placeholder { color: var(--ink-3); }
 </style>
 </head>
 <body>
@@ -154,9 +162,29 @@
 
 <div id="nav"></div>
 
+<!-- ===================== REJECT SHEET =====================
+     A rejection must be diagnosable: a reason from the list, an optional
+     note, and whether a change upstream caused it. -->
+<div class="scrim" id="reject-scrim"></div>
+<div class="sheet" id="reject" role="dialog" aria-modal="true" aria-labelledby="reject-title" aria-hidden="true" data-open="false">
+  <div class="sheet__grip" aria-hidden="true"></div>
+  <h2 class="sheet__h" id="reject-title">Reject — why?</h2>
+  <p class="sheet__ctx" id="reject-ctx"></p>
+  <div id="reject-reasons"></div>
+  <p class="meta" style="margin:var(--s3) 0 var(--s2)">Caused by a change upstream?</p>
+  <div style="display:flex;gap:var(--s2)">
+    <button class="sheet__opt" data-upstream="no" style="flex:1">No</button>
+    <button class="sheet__opt" data-upstream="yes" style="flex:1">Yes</button>
+  </div>
+  <label class="meta" for="reject-note" style="display:block;margin:var(--s3) 0 var(--s2)">Anything to add? (optional)</label>
+  <textarea class="field" id="reject-note" maxlength="300" placeholder="e.g. panel still shows the old sugar value"></textarea>
+  <button class="btn btn--primary btn--block" style="margin-top:var(--s3)" id="reject-send">Reject</button>
+  <button class="btn btn--ghost btn--block" style="margin-top:var(--s2)" data-close-reject>Cancel</button>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=19"></script>
+<script src="hocco-api.js?v=20"></script>
 <script src="hocco-ui.js?v=12"></script>
 <script>
 (function () {
@@ -184,11 +212,19 @@
     document.getElementById("tracks").innerHTML = '<div class="emptyfilter" role="status">' + html + "</div>";
   }
   var glance = document.querySelector(".glance");
+  var myDept = null, lanesWired = false, lastD = null;
   function start() {
     glance.hidden = true;           /* shown once there's an initiative to fill it */
     document.getElementById("bar-sub").textContent = "Loading…";
     message("Loading initiative…");
-    window.HoccoAPI.load().then(function (D) {
+    load();
+  }
+  function load() {
+    window.HoccoAPI.me().catch(function () { return null; }).then(function (u) {
+      myDept = u && u.profile ? u.profile.department_id : null;
+      return window.HoccoAPI.load();
+    }).then(function (D) {
+      lastD = D;
       var K = D.getInitiative(id);
       if (!K) {
         document.getElementById("bar-sub").textContent = "";
@@ -356,7 +392,7 @@
 
   document.getElementById("tracks").innerHTML = K.tracks.map(function (t) {
     var mod = t.state === "blocked" ? " lane--blocked" : (t.state === "done" ? " lane--done" : "");
-    var open = t.state === "blocked";
+    var open = t.state === "blocked" || (t.decisions || []).length > 0;
     var chip = { blocked: "Blocked", done: "On track", queued: "Queued", working: "On track" }[t.state];
     var chipCls = { blocked: "risk", done: "ok", queued: "queued", working: "ok" }[t.state];
 
@@ -383,11 +419,13 @@
             (d.critical ? "▲ " : "") + U.esc(d.text) + "</div>";
         }).join("") +
         (t.gate ? gateCard(t.gate) : "") +
+        (t.decisions || []).map(decisionCard).join("") +
       "</div>" +
     "</div>";
   }).join("");
 
   /* Expanding one collapses the others. */
+  if (!lanesWired) { lanesWired = true;
   document.getElementById("tracks").addEventListener("click", function (e) {
     var head = e.target.closest(".lane__head");
     if (!head) return;
@@ -402,6 +440,7 @@
       lane.querySelector(".lane__body").hidden = false;
     }
   });
+  }
 
   /* ---- Files: aggregated to initiative level, context preserved ---- */
   var slug = K.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -439,6 +478,101 @@
     var s = ["th", "st", "nd", "rd"], v = n % 100;
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
   }
+
+  /* ================= Gate decisions =================
+     A gate waits here once the stage before it is Done. Only the gate's
+     department sees the buttons; the database checks the rule again. */
+  function decisionCard(g) {
+    var mine = myDept && myDept === g.deptId;
+    return '<div class="glass-strong gatecard">' +
+      '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:var(--s2)">' +
+        '<span class="h3">' + U.esc(g.name) + "</span>" +
+        (g.milestone ? '<span class="chip chip--init" style="margin-left:auto">Milestone</span>' : "") +
+      "</div>" +
+      '<div class="meta">“' + U.esc(g.stage) + "” is done — waiting for " + U.esc(g.dept) +
+        "’s decision (rev " + g.revision + ").</div>" +
+      (mine
+        ? '<div class="actions"><button class="btn btn--primary" data-approve="' + g.id + '" data-name="' + U.esc(g.name) + '">Approve</button>' +
+          '<button class="btn btn--ghost" data-reject="' + g.id + '" data-name="' + U.esc(g.name) + '" data-stage="' + U.esc(g.stage) + '">Reject</button></div>'
+        : '<div class="meta" style="margin-top:var(--s2)">' +
+            (myDept ? "Only " + U.esc(g.dept) + " can decide this gate."
+                    : '<a class="rowlink" href="hocco-mywork-mobile.html">Sign in on My Work</a> to decide gates for your department.') +
+          "</div>") +
+    "</div>";
+  }
+
+  var rejectSheet = U.sheet("reject");
+  var rejecting = null, rejectReason = null, rejectUpstream = null;
+
+  function afterDecision(msg) {
+    U.toast(U.esc(msg));
+    load();
+  }
+
+  document.getElementById("tracks").addEventListener("click", function (e) {
+    var ap = e.target.closest("[data-approve]");
+    if (ap) {
+      if (!window.confirm("Approve “" + ap.dataset.name + "”?")) return;
+      ap.disabled = true;
+      window.HoccoAPI.decideGate(ap.dataset.approve, "approve").then(function (r) {
+        afterDecision("Approved " + r.gate + "." +
+          (r.unblocked && r.unblocked.length ? " Now unblocked: " + r.unblocked.join(", ") + "." : "") +
+          (r.notified && r.notified.length ? " Good news sent to the track." : ""));
+      }, function (err) { ap.disabled = false; U.toast(U.esc(err.message)); });
+      return;
+    }
+    var rj = e.target.closest("[data-reject]");
+    if (rj) {
+      rejecting = rj.dataset.reject; rejectReason = null; rejectUpstream = null;
+      document.getElementById("reject-ctx").textContent =
+        rj.dataset.name + " · “" + rj.dataset.stage + "” goes back to in progress.";
+      document.getElementById("reject-reasons").innerHTML = (lastD ? lastD.gateReasonList : []).map(function (r) {
+        return '<button class="sheet__opt" data-reason="' + r.id + '">' + U.esc(r.label) + "</button>";
+      }).join("");
+      document.getElementById("reject-note").value = "";
+      paintPicks();
+      rejectSheet.open();
+    }
+  });
+
+  /* Selected options use the same highlight as My Work's reason picker. */
+  function paintPicks() {
+    document.querySelectorAll("#reject [data-reason]").forEach(function (b) {
+      var on = Number(b.dataset.reason) === rejectReason;
+      b.style.borderColor = on ? "var(--raspberry-deep)" : "var(--edge)";
+      b.style.background  = on ? "var(--glass-strong)"   : "var(--glass-faint)";
+      b.setAttribute("aria-pressed", String(on));
+    });
+    document.querySelectorAll("#reject [data-upstream]").forEach(function (b) {
+      var on = rejectUpstream !== null && (b.dataset.upstream === "yes") === rejectUpstream;
+      b.style.borderColor = on ? "var(--raspberry-deep)" : "var(--edge)";
+      b.style.background  = on ? "var(--glass-strong)"   : "var(--glass-faint)";
+      b.setAttribute("aria-pressed", String(on));
+    });
+  }
+
+  rejectSheet.el.addEventListener("click", function (e) {
+    if (e.target.closest("[data-close-reject]")) return rejectSheet.close();
+    var r = e.target.closest("[data-reason]");
+    if (r) { rejectReason = Number(r.dataset.reason); return paintPicks(); }
+    var up = e.target.closest("[data-upstream]");
+    if (up) { rejectUpstream = up.dataset.upstream === "yes"; return paintPicks(); }
+  });
+
+  document.getElementById("reject-send").addEventListener("click", function () {
+    if (!rejectReason) { U.toast("Pick a reason so the rejection is diagnosable."); return; }
+    if (rejectUpstream === null) { U.toast("Say whether a change upstream caused it."); return; }
+    var btn = this;
+    btn.disabled = true;
+    window.HoccoAPI.decideGate(rejecting, "reject", rejectReason, rejectUpstream,
+                               document.getElementById("reject-note").value.trim()).then(function (r) {
+      btn.disabled = false;
+      rejectSheet.close();
+      afterDecision("Rejected — rev " + r.revision + "." +
+        (r.flags && r.flags.indexOf("repeat") > -1 ? " Same reason as last time — flagged." : "") +
+        " The work goes back to in progress.");
+    }, function (err) { btn.disabled = false; U.toast(U.esc(err.message)); });
+  });
 })();
 </script>
 </body>

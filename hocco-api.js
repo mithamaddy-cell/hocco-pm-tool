@@ -87,6 +87,10 @@ window.HoccoAPI = (function () {
       });
   }
   function markNotificationsRead() { return rpc("mark_notifications_read", {}); }
+  function decideGate(gateId, decision, reasonId, upstream, note) {
+    return rpc("decide_gate", { p_gate_id: gateId, p_decision: decision, p_reason_id: reasonId || null,
+                                p_upstream: !!upstream, p_note: note || null });
+  }
   function respondToBlocker(blockerId, action, note) {
     return rpc("respond_to_blocker", { p_blocker_id: blockerId, p_action: action, p_note: note || null });
   }
@@ -198,14 +202,16 @@ window.HoccoAPI = (function () {
       q("departments",  "id, name, sort_order"),
       q("tracks",       "id, initiative_id, slug, name, department_id, position, status, summary"),
       q("stages",       "id, track_id, name, position, department_id, second_department_id, status, note, closed_on, closed_at, unblocked_at, last_update_on"),
-      q("gates",        "id, track_id, name, after_stage_position, status"),
+      q("gates",        "id, track_id, name, after_stage_position, department_id, status, is_milestone"),
       q("gate_reviews", "gate_id, revision, outcome, reviewer_department_id, reason, note, flags, reviewed_on"),
       q("blockers",     "id, initiative_id, title, raised_by_department_id, against_department_id, status, raised_on, acknowledged_on, note, dispute_note"),
       q("track_dependencies", "blocking_track_id, blocked_track_id, critical, note"),
-      q("blocker_reasons", "id, label, sort_order")
+      q("blocker_reasons", "id, label, sort_order"),
+      q("gate_rejection_reasons", "id, label, sort_order")
     ]).then(function (r) {
       return build({ initiatives: r[0], departments: r[1], tracks: r[2], stages: r[3],
-                     gates: r[4], reviews: r[5], blockers: r[6], deps: r[7], reasons: r[8] });
+                     gates: r[4], reviews: r[5], blockers: r[6], deps: r[7], reasons: r[8],
+                     gateReasons: r[9] });
     });
   }
 
@@ -396,9 +402,20 @@ window.HoccoAPI = (function () {
           return { critical: false, text: "Depends on → " + from.name + (fg ? " · " + fg.name : "") };
         }));
 
+        /* Gates whose stage is Done and that still need a decision. */
+        var decisions = gates.filter(function (g) {
+          var before = stages.filter(function (x) { return x.position === g.after_stage_position; })[0];
+          return g.status !== "passed" && before && before.status === "done";
+        }).map(function (g) {
+          var before = stages.filter(function (x) { return x.position === g.after_stage_position; })[0];
+          return { id: g.id, name: g.name, stage: before.name, milestone: !!g.is_milestone,
+                   deptId: g.department_id, dept: dept(g.department_id),
+                   revision: g.reviews.length + 1 };
+        });
+
         return {
           id: t.slug, name: t.name, dept: dept(t.department_id), state: t.status,
-          summary: t.summary || "", strip: strip, deps: deps, gate: gate,
+          summary: t.summary || "", strip: strip, deps: deps, gate: gate, decisions: decisions,
           stages: stages.map(function (s) {
             return { name: s.name,
                      who: dept(s.department_id) + (s.second_department_id ? " + " + dept(s.second_department_id) : ""),
@@ -537,6 +554,8 @@ window.HoccoAPI = (function () {
       getMyWork: getMyWork,
       blockerReasons: db.reasons.slice().sort(function (a, b) { return a.sort_order - b.sort_order; })
         .map(function (r) { return r.label; }),
+      gateReasonList: db.gateReasons.slice().sort(function (a, b) { return a.sort_order - b.sort_order; })
+        .map(function (r) { return { id: r.id, label: r.label }; }),
       blockerReasonList: db.reasons.slice().sort(function (a, b) { return a.sort_order - b.sort_order; })
         .map(function (r) { return { id: r.id, label: r.label }; }),
       initiativeSlug: function (uuid) {
@@ -646,5 +665,5 @@ window.HoccoAPI = (function () {
 
   return { load: load, me: me, signIn: signIn, signOut: signOut, setStageStatus: setStageStatus,
            raiseBlocker: raiseBlocker, notifications: notifications, markNotificationsRead: markNotificationsRead,
-           respondToBlocker: respondToBlocker };
+           respondToBlocker: respondToBlocker, decideGate: decideGate };
 })();
