@@ -171,6 +171,9 @@ window.HoccoAPI = (function () {
   }
   function adminSetActive(personId, active) { return rpc("admin_set_active", { p_person: personId, p_active: active }); }
   function adminSetCovering(personId, deptId) { return rpc("admin_set_covering", { p_person: personId, p_department: deptId || null }); }
+  /* Test clock (admins): move the app's "today", then run the hourly checks now. */
+  function adminSetToday(isoDate) { return rpc("admin_set_today", { p_date: isoDate || null }); }
+  function runAutomations() { return rpc("run_automations", {}); }
 
   function assignStage(stageId, personId) {
     return rpc("assign_stage", { p_stage_id: stageId, p_assignee: personId || null });
@@ -675,6 +678,8 @@ window.HoccoAPI = (function () {
 
     var data = {
       today: longDate(today),
+      todayISO: today.getFullYear() + "-" + ("0" + (today.getMonth() + 1)).slice(-2) + "-" + ("0" + today.getDate()).slice(-2),
+      testClock: !!_dbToday,
       getInitiative: getInitiative,
       getMyWork: getMyWork,
       blockerReasons: db.reasons.slice().sort(function (a, b) { return a.sort_order - b.sort_order; })
@@ -796,5 +801,6 @@ window.HoccoAPI = (function () {
            respondToBlocker: respondToBlocker, decideGate: decideGate, setPriority: setPriority,
            assignStage: assignStage, adminListPeople: adminListPeople, adminAddPerson: adminAddPerson,
            adminSetActive: adminSetActive, adminSetCovering: adminSetCovering,
-           loadTemplates: loadTemplates, createInitiative: createInitiative };
+           loadTemplates: loadTemplates, createInitiative: createInitiative,
+           adminSetToday: adminSetToday, runAutomations: runAutomations };
 })();

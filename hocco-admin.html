@@ -37,6 +37,23 @@
 </header>
 
 <main class="frame screen">
+  <!-- Test clock: simulate time passing, then run the hourly checks now. -->
+  <section class="section" id="clock" hidden>
+    <div class="section__head"><p class="eyebrow">Test clock</p></div>
+    <div class="glass" style="padding:var(--s4);border-radius:var(--r-md)">
+      <p class="meta" style="margin:0 0 var(--s2)">The app treats this date as “today”. Move it forward, then run the checks to see what fires.</p>
+      <p class="h3" id="clock-date" style="margin:0 0 var(--s3)"></p>
+      <div class="opts2" style="margin-bottom:var(--s2)">
+        <button class="btn btn--ghost" data-days="1">+1 day</button>
+        <button class="btn btn--ghost" data-days="3">+3 days</button>
+        <button class="btn btn--ghost" data-days="7">+1 week</button>
+      </div>
+      <button class="btn btn--ghost btn--block" data-reset>Reset to 11 Aug 2026</button>
+      <button class="btn btn--primary btn--block" style="margin-top:var(--s2)" id="run-checks">Run the checks now</button>
+      <div id="fired" style="margin-top:var(--s3)"></div>
+    </div>
+  </section>
+
   <div id="top"></div>
   <div id="people"></div>
   <hr class="divider">
@@ -88,7 +105,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=29"></script>
+<script src="hocco-api.js?v=30"></script>
 <script src="hocco-ui.js?v=17"></script>
 <script>
 (function () {
@@ -118,6 +135,7 @@
         people = r[0];
         depts = r[1].departmentList;
         depts.forEach(function (d) { deptName[d.id] = d.name; });
+        showClock(r[1]);
         render();
       });
     }).catch(function (err) {
@@ -140,6 +158,49 @@
     var d = new Date(ts);
     return d.getDate() + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
   }
+
+  /* ---- Test clock ---- */
+  var clockISO = null;
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function fmt(iso) { var p = iso.split("-"); return +p[2] + " " + MONTHS[+p[1] - 1] + " " + p[0]; }
+  function showClock(D) {
+    clockISO = D.todayISO;
+    document.getElementById("clock").hidden = false;
+    document.getElementById("clock-date").textContent = "App date: " + fmt(clockISO) + (D.testClock ? "" : " (real date)");
+  }
+  function addDays(iso, n) {
+    var p = iso.split("-"), d = new Date(+p[0], +p[1] - 1, +p[2] + n);
+    return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+  }
+  function setClock(iso) {
+    return API.adminSetToday(iso).then(function (r) {
+      clockISO = r.today;
+      document.getElementById("clock-date").textContent = "App date: " + fmt(clockISO);
+      document.getElementById("fired").innerHTML = "";
+      U.toast(U.esc("App date is now " + fmt(clockISO) + ". Run the checks to see what fires."));
+    }, function (err) { U.toast(U.esc(err.message)); });
+  }
+  document.getElementById("clock").addEventListener("click", function (e) {
+    var d = e.target.closest("[data-days]");
+    if (d && clockISO) return setClock(addDays(clockISO, +d.dataset.days));
+    if (e.target.closest("[data-reset]")) return setClock("2026-08-11");
+    var run = e.target.closest("#run-checks");
+    if (!run) return;
+    run.disabled = true; run.textContent = "Running…";
+    API.runAutomations().then(function (rows) {
+      run.disabled = false; run.textContent = "Run the checks now";
+      document.getElementById("fired").innerHTML = rows.length
+        ? '<p class="meta" style="margin:0 0 var(--s2)">Fired just now (' + rows.length + "):</p>" + rows.map(function (r) {
+            return '<div class="row row--present">' +
+              '<div class="row__head"><span class="row__title">' + U.esc(r.rule) + "</span></div>" +
+              '<div class="row__reason"><span>' + U.esc(r.about) + "</span></div>" +
+              '<div class="meta">To: ' + U.esc(r.sent_to) + "</div>" +
+              '<div class="meta">Why: ' + U.esc(r.why) + "</div>" +
+            "</div>";
+          }).join("")
+        : '<div class="emptyfilter">Nothing new to send on ' + fmt(clockISO) + ". (Each nudge only ever goes out once.)</div>";
+    }, function (err) { run.disabled = false; run.textContent = "Run the checks now"; U.toast(U.esc(err.message)); });
+  });
 
   /* ---- The list: one section per department ---- */
   function render() {
