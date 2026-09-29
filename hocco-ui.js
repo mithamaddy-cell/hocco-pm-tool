@@ -12,6 +12,11 @@ window.UI = (function () {
     });
   }
 
+  /* Brand codes → names (CLAUDE.md: A = Hocco, B = H&H, Shared = both). */
+  function brandName(code) {
+    return code === "A" ? "Hocco" : code === "B" ? "H&H" : code === "Shared" ? "Both brands" : String(code || "");
+  }
+
   /* Brand is an ATTRIBUTE, not a workspace (spec §4).
      Always paired with a text label — never colour alone. */
   function brandChip(brand) {
@@ -19,7 +24,7 @@ window.UI = (function () {
        identical tags side by side read as one repeated thing. */
     if (brand === "Shared") return '<span class="chip chip--queued">Both brands</span>';
     var cls = brand === "A" ? "chip--brand-a" : "chip--brand-b";
-    return '<span class="chip ' + cls + '">Brand ' + esc(brand) + "</span>";
+    return '<span class="chip ' + cls + '">' + esc(brandName(brand)) + "</span>";
   }
 
   /* State chips. The class sets colour; the text sets meaning.
@@ -120,7 +125,7 @@ window.UI = (function () {
 
     var FACETS = [
       { key: "brand", label: "Brand",
-        opts: [["all", "All brands"], ["A", "Brand A"], ["B", "Brand B"], ["Shared", "Both brands"]] },
+        opts: [["all", "All brands"], ["A", "Hocco"], ["B", "H&H"], ["Shared", "Both brands"]] },
       { key: "category", label: "Category",
         opts: [["all", "All categories"]].concat(D.categories.map(function (c) { return [c, c]; })) },
       { key: "priority", label: "Priority",
@@ -331,6 +336,7 @@ window.UI = (function () {
 
   return {
     esc: esc, brandChip: brandChip, stateChip: stateChip, bottomNav: bottomNav,
-    sheet: sheet, toast: toast, filters: filters, account: account, initials: initials
+    sheet: sheet, toast: toast, filters: filters, account: account, initials: initials,
+    brandName: brandName
   };
 })();

@@ -133,6 +133,36 @@ window.HoccoAPI = (function () {
   function setPriority(initiativeUuid, priority) {
     return rpc("set_priority", { p_initiative_id: initiativeUuid, p_priority: priority });
   }
+  /* ---- New Initiative: the templates, with their real sizes ---- */
+  function loadTemplates() {
+    var sb;
+    try { sb = client(); } catch (e) { return Promise.reject(e); }
+    function q(table, cols) {
+      return sb.from(table).select(cols).then(function (res) {
+        if (res.error) throw new Error("Couldn't read " + table + ": " + res.error.message);
+        return res.data;
+      });
+    }
+    return Promise.all([
+      q("templates", "id, type, name, description, is_draft, sort_order"),
+      q("template_tracks", "id, template_id"),
+      q("template_stages", "template_track_id"),
+      q("template_gates", "template_track_id")
+    ]).then(function (r) {
+      var trackTpl = {};
+      r[1].forEach(function (t) { trackTpl[t.id] = t.template_id; });
+      function count(list, id) { return list.filter(function (x) { return trackTpl[x.template_track_id] === id; }).length; }
+      return r[0].sort(function (a, b) { return a.sort_order - b.sort_order; }).map(function (t) {
+        return { id: t.id, type: t.type, name: t.name, description: t.description || "", draft: t.is_draft,
+                 tracks: r[1].filter(function (x) { return x.template_id === t.id; }).length,
+                 stages: count(r[2], t.id), gates: count(r[3], t.id) };
+      });
+    });
+  }
+  function createInitiative(name, templateId, brand, launchOn) {
+    return rpc("create_initiative", { p_name: name, p_template: templateId, p_brand: brand, p_launch: launchOn || null });
+  }
+
   /* ---- Admin (each function checks "is this an active admin?" itself) ---- */
   function adminListPeople() { return rpc("admin_list_people", {}); }
   function adminAddPerson(name, email, deptId, role, password) {
@@ -386,7 +416,9 @@ window.HoccoAPI = (function () {
       var started = row.started_on ? parseDate(row.started_on) : null;
       var stuck = null, events = [];
 
-      if (started) events.push({ d: row.started_on, k: "good", t: "Initiative created", s: "Work started" });
+      if (started) events.push({ d: row.started_on, k: "good", t: "Prioritised", s: "Work started" });
+      else if (row.created_at) events.push({ d: row.created_at.slice(0, 10), k: "", t: "Initiative created",
+                                             s: "Waiting for Leadership to prioritise it" });
 
       var outTracks = tracks.map(function (t) {
         var stages = (stagesByTrack[t.id] || []).sort(function (a, b) { return a.position - b.position; });
@@ -757,5 +789,6 @@ window.HoccoAPI = (function () {
            raiseBlocker: raiseBlocker, notifications: notifications, markNotificationsRead: markNotificationsRead,
            respondToBlocker: respondToBlocker, decideGate: decideGate, setPriority: setPriority,
            assignStage: assignStage, adminListPeople: adminListPeople, adminAddPerson: adminAddPerson,
-           adminSetActive: adminSetActive, adminSetCovering: adminSetCovering };
+           adminSetActive: adminSetActive, adminSetCovering: adminSetCovering,
+           loadTemplates: loadTemplates, createInitiative: createInitiative };
 })();

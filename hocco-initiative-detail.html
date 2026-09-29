@@ -202,8 +202,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=26"></script>
-<script src="hocco-ui.js?v=14"></script>
+<script src="hocco-api.js?v=27"></script>
+<script src="hocco-ui.js?v=15"></script>
 <script>
 (function () {
   var U = window.UI;
@@ -301,7 +301,7 @@
   document.title = K.name + " — Hocco PM";
   document.getElementById("bar-name").textContent = K.name;
   document.getElementById("bar-sub").textContent =
-    K.type + " · " + (K.brand === "Shared" ? "Both brands" : "Brand " + K.brand);
+    K.type + " · " + U.brandName(K.brand);
   document.getElementById("g-name").textContent = K.name;
   document.getElementById("gowner").textContent = "Owner: " + K.owner;
 

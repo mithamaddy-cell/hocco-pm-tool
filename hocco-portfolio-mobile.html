@@ -121,8 +121,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="hocco-config.js?v=15"></script>
-<script src="hocco-api.js?v=26"></script>
-<script src="hocco-ui.js?v=14"></script>
+<script src="hocco-api.js?v=27"></script>
+<script src="hocco-ui.js?v=15"></script>
 <script>
 (function () {
   var U = window.UI;
@@ -275,31 +275,32 @@
   /* ---- Calendar: group by launch month, flag same-day collisions.
      Each launch carries a status rail + label (on-track / delayed / blocked) —
      three distinct signals, never colour alone (spec §8). Filterable live. ---- */
-  var order = ["Aug", "Sep", "Oct", "Nov"];
-  var full = { Aug: "August 2026", Sep: "September 2026", Oct: "October 2026", Nov: "November 2026" };
+  /* Months come from the launch dates themselves (any month, any year). */
+  var MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July",
+                    "August", "September", "October", "November", "December"];
+  var MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   var STATUS_LABEL = { ontrack: "On track", delayed: "Delayed", blocked: "Blocked" };
 
   function renderCalendar(matchFn) {
-    var dated = D.initiatives.filter(function (i) { return i.launch !== "—" && matchFn(i); });
-    var months = {};
-    dated.forEach(function (i) { var m = i.launch.split(" ")[1]; (months[m] = months[m] || []).push(i); });
+    var dated = D.initiatives.filter(function (i) { return i._launchOn && matchFn(i); });
+    var months = {};                                   /* "2026-08" → launches that month */
+    dated.forEach(function (i) { var k = i._launchOn.slice(0, 7); (months[k] = months[k] || []).push(i); });
 
-    var html = order.map(function (m) {
-      var list = months[m] || [];
-      if (!list.length) return "";
-      /* Collisions are counted against the FULL day, not the filtered subset,
-         so a hidden launch still warns of the clash. */
-      var byDay = {};
-      D.initiatives.forEach(function (i) {
-        if (i.launch.split(" ")[1] === m && i.launch !== "—") {
-          var d = i.launch.split(" ")[0]; (byDay[d] = byDay[d] || []).push(i);
-        }
-      });
+    /* Collisions are counted against the FULL day, not the filtered subset,
+       so a hidden launch still warns of the clash. */
+    var byDate = {};
+    D.initiatives.forEach(function (i) {
+      if (i._launchOn) (byDate[i._launchOn] = byDate[i._launchOn] || []).push(i);
+    });
 
-      return '<div class="cal__month"><div class="cal__label">' + full[m] + "</div>" +
+    var html = Object.keys(months).sort().map(function (k) {
+      var list = months[k];
+      var mi = parseInt(k.slice(5, 7), 10) - 1, m = MONTH_SHORT[mi];
+      return '<div class="cal__month"><div class="cal__label">' + MONTH_FULL[mi] + " " + k.slice(0, 4) + "</div>" +
         list.map(function (i) {
-          var day = i.launch.split(" ")[0];
-          var collide = byDay[day].length > 1;
+          var day = parseInt(i._launchOn.slice(8, 10), 10);
+          var clash = byDate[i._launchOn];
+          var collide = clash.length > 1;
           var st = D.launchStatus(i);
           var tier = i.band === "risk" ? "glass-strong" : "glass-faint";
           var icon = st === "ontrack" ? "✓" : "▲";
@@ -308,9 +309,9 @@
             '<div class="cal__date"><div class="cal__d num">' + day + '</div><div class="cal__m">' + m + "</div></div>" +
             '<div class="cal__body">' +
               '<div class="row__title" style="font-size:14px">' + U.esc(i.name) + "</div>" +
-              '<div class="meta">' + U.esc(i.type) + " · " + (i.brand === "Shared" ? "Both brands" : "Brand " + U.esc(i.brand)) + "</div>" +
+              '<div class="meta">' + U.esc(i.type) + " · " + U.esc(U.brandName(i.brand)) + "</div>" +
               '<span class="cal__status cal__status--' + st + '">' + icon + " " + STATUS_LABEL[st] + "</span>" +
-              (collide ? '<div class="collide">▲ Collides with ' + (byDay[day].length - 1) + " other launch" + (byDay[day].length > 2 ? "es" : "") + "</div>" : "") +
+              (collide ? '<div class="collide">▲ Collides with ' + (clash.length - 1) + " other launch" + (clash.length > 2 ? "es" : "") + "</div>" : "") +
             "</div>" +
           "</div>";
         }).join("") + "</div>";
